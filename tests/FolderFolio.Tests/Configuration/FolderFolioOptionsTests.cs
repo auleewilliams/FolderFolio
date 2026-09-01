@@ -40,4 +40,27 @@ public sealed class FolderFolioOptionsTests
         Assert.Contains(result.Failures!, value => value.Contains(nameof(options.WebPQuality)));
         Assert.Contains(result.Failures!, value => value.Contains(nameof(options.SiteTitle)));
     }
+
+    [Fact]
+    public void Validator_rejects_web_long_edge_smaller_than_grid_long_edge()
+    {
+        var options = new FolderFolioOptions
+        {
+            GridLongEdge = 401,
+            WebLongEdge = 400
+        };
+
+        var result = new FolderFolioOptionsValidator().Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Failures!, value => value.Contains(nameof(options.WebLongEdge)));
+    }
+
+    [Fact]
+    public void Validator_accepts_a_valid_configuration()
+    {
+        var result = new FolderFolioOptionsValidator().Validate(null, new FolderFolioOptions());
+
+        Assert.True(result.Succeeded);
+    }
 }
