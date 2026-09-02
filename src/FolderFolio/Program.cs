@@ -3,6 +3,7 @@ using FolderFolio.Imaging;
 using FolderFolio.Indexing;
 using FolderFolio.Web;
 using FolderFolio.Web.ViewModels;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,17 +30,22 @@ builder.Services.AddSingleton(provider => new PhotoRootEventMapper(
 builder.Services.AddSingleton<IndexRefreshCoordinator>();
 builder.Services.AddSingleton<IPhotoRootWatcher, FileSystemPhotoRootWatcher>();
 builder.Services.AddHostedService<IndexingService>();
+builder.Services.Configure<ForwardedHeadersOptions>(ForwardedHeadersSetup.Configure);
 builder.Services.AddRazorPages();
 
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Error");
+    app.UseHsts();
+}
 app.UseStaticFiles();
 app.UseRouting();
+app.MapGet("/health", HealthEndpoint.Handle);
+MediaEndpoint.Map(app);
 app.MapRazorPages();
-app.MapGet(
-    "/media/{albumSlug}/{photoId}/{size}",
-    MediaEndpoint.HandleAsync)
-   .WithName(MediaEndpoint.RouteName);
 
 app.Run();
 

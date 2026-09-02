@@ -8,6 +8,11 @@ public static class MediaEndpoint
 {
     public const string RouteName = "folderfolio-media";
 
+    public static void Map(WebApplication app) => app.MapGet(
+        "/media/{albumSlug}/{photoId}/{size}",
+        HandleAsync)
+        .WithName(RouteName);
+
     public static async Task<IResult> HandleAsync(
         string albumSlug,
         string photoId,
