@@ -34,6 +34,8 @@ Settings live in the `FolderFolio` configuration section and can be overridden w
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
+| `ASPNETCORE_ENVIRONMENT` | `Production` in Compose | Selects the production middleware behavior, including production exception handling and HSTS. |
+| `ASPNETCORE_HTTP_PORTS` | `8080` in the container image | Sets the container listener port; Compose maps host loopback port `8080` to it. |
 | `FolderFolio__PhotoRoot` | `/photos` | Required absolute root containing immediate album directories. |
 | `FolderFolio__CacheRoot` | `/cache` | Required absolute derivative-cache path. |
 | `FolderFolio__GridLongEdge` | `400` | Positive maximum long edge for gallery derivatives. |
