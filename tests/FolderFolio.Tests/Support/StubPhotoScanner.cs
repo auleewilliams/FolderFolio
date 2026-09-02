@@ -11,6 +11,8 @@ public sealed class StubPhotoScanner : IPhotoScanner
 
     public Exception? Exception { get; set; }
 
+    public Action? OnScanAll { get; set; }
+
     public int ScanAllCallCount { get; private set; }
 
     public int RescanAlbumsCallCount { get; private set; }
@@ -21,6 +23,7 @@ public sealed class StubPhotoScanner : IPhotoScanner
     {
         cancellationToken.ThrowIfCancellationRequested();
         ScanAllCallCount++;
+        OnScanAll?.Invoke();
         return Exception is null ? Task.FromResult(AllResult) : Task.FromException<PhotoScanResult>(Exception);
     }
 

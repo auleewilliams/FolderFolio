@@ -4,6 +4,11 @@ namespace FolderFolio.Indexing;
 
 public sealed class PhotoRootEventMapper
 {
+    private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".webp"
+    };
+
     private readonly string photoRoot;
 
     public PhotoRootEventMapper(string photoRoot)
@@ -82,7 +87,9 @@ public sealed class PhotoRootEventMapper
             return null;
         }
 
-        return segments.Length == 2 ? segments[0] : null;
+        return segments.Length == 2 && SupportedExtensions.Contains(Path.GetExtension(segments[1]))
+            ? segments[0]
+            : null;
     }
 
     private static bool IsOutsidePhotoRoot(string relativePath) =>

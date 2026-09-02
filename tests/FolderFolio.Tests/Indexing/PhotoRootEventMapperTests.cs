@@ -17,6 +17,30 @@ public sealed class PhotoRootEventMapperTests
         Assert.Equal(["01-Landscapes"], request.AlbumDirectoryNames);
     }
 
+    [Theory]
+    [InlineData("notes.txt")]
+    [InlineData("source.raw")]
+    [InlineData("preview.gif")]
+    public void Ignores_direct_files_that_the_photo_scanner_does_not_support(string fileName)
+    {
+        var request = mapper.MapPath($"/photos/01-Landscapes/{fileName}");
+
+        Assert.Null(request);
+    }
+
+    [Theory]
+    [InlineData("photo.JPG")]
+    [InlineData("photo.JpEg")]
+    [InlineData("photo.PnG")]
+    [InlineData("photo.wEbP")]
+    public void Maps_supported_direct_photo_extensions_case_insensitively(string fileName)
+    {
+        var request = mapper.MapPath($"/photos/01-Landscapes/{fileName}");
+
+        Assert.NotNull(request);
+        Assert.Equal(["01-Landscapes"], request.AlbumDirectoryNames);
+    }
+
     [Fact]
     public void Ignores_photos_in_nested_directories_and_paths_outside_the_root()
     {

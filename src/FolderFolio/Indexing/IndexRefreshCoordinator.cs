@@ -28,7 +28,10 @@ public sealed class IndexRefreshCoordinator
         this.logger = logger;
     }
 
-    public async Task ProcessNextBatchAsync(CancellationToken cancellationToken)
+    public Task ProcessNextBatchAsync(CancellationToken cancellationToken) =>
+        ProcessNextBatchAsync(static () => true, cancellationToken);
+
+    public async Task ProcessNextBatchAsync(Func<bool> isPhotoRootAvailable, CancellationToken cancellationToken)
     {
         if (!await queue.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -65,6 +68,12 @@ public sealed class IndexRefreshCoordinator
         }
 
         request = Combine(request, ConsumeForcedFullScan());
+        if (!isPhotoRootAvailable())
+        {
+            index.MarkDegraded("Photo root is unavailable.");
+            throw new DirectoryNotFoundException("The photo root is unavailable.");
+        }
+
         await RefreshAsync(request, markFailureAsDegraded: true, cancellationToken).ConfigureAwait(false);
     }
 

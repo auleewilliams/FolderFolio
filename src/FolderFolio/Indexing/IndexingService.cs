@@ -74,7 +74,7 @@ public sealed class IndexingService : BackgroundService
 
                 while (!stoppingToken.IsCancellationRequested)
                 {
-                    await coordinator.ProcessNextBatchAsync(stoppingToken).ConfigureAwait(false);
+                    await coordinator.ProcessNextBatchAsync(IsPhotoRootAvailable, stoppingToken).ConfigureAwait(false);
                 }
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
@@ -94,18 +94,21 @@ public sealed class IndexingService : BackgroundService
             }
         }
     }
+
+    private bool IsPhotoRootAvailable() => Directory.Exists(photoRoot);
 }
 
 internal interface IIndexRefreshCoordinatorFacade
 {
-    Task ProcessNextBatchAsync(CancellationToken cancellationToken);
+    Task ProcessNextBatchAsync(Func<bool> isPhotoRootAvailable, CancellationToken cancellationToken);
 
     Task RefreshFullAsync(bool markFailureAsDegraded, CancellationToken cancellationToken);
 }
 
 internal sealed class IndexRefreshCoordinatorFacade(IndexRefreshCoordinator coordinator) : IIndexRefreshCoordinatorFacade
 {
-    public Task ProcessNextBatchAsync(CancellationToken cancellationToken) => coordinator.ProcessNextBatchAsync(cancellationToken);
+    public Task ProcessNextBatchAsync(Func<bool> isPhotoRootAvailable, CancellationToken cancellationToken) =>
+        coordinator.ProcessNextBatchAsync(isPhotoRootAvailable, cancellationToken);
 
     public Task RefreshFullAsync(bool markFailureAsDegraded, CancellationToken cancellationToken) =>
         coordinator.RefreshFullAsync(markFailureAsDegraded, cancellationToken);
