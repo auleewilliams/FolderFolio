@@ -47,10 +47,10 @@ public sealed class ImageSharpDerivativeGenerator : IImageDerivativeGenerator
                 TargetSize = new Size(maxLongEdge, maxLongEdge)
             }
             : new DecoderOptions
-        {
-            MaxFrames = 1,
-            SkipMetadata = false
-        };
+            {
+                MaxFrames = 1,
+                SkipMetadata = false
+            };
 
         using var image = await Image.LoadAsync(decoderOptions, sourcePath, cancellationToken);
         image.Mutate(context => context.AutoOrient());

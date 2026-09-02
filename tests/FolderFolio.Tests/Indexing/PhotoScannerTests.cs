@@ -23,7 +23,14 @@ public sealed class PhotoScannerTests
         File.WriteAllText(Path.Combine(trip, "corrupt.jpg"), "not a jpeg");
         var nested = Directory.CreateDirectory(Path.Combine(trip, "nested"));
         ImageFixtureFactory.CreateJpeg(Path.Combine(nested.FullName, "ignored.jpg"));
-        File.CreateSymbolicLink(Path.Combine(trip, "linked.jpg"), Path.Combine(trip, "early.jpg"));
+        try
+        {
+            File.CreateSymbolicLink(Path.Combine(trip, "linked.jpg"), Path.Combine(trip, "early.jpg"));
+        }
+        catch (IOException exception) when (OperatingSystem.IsWindows())
+        {
+            throw Xunit.Sdk.SkipException.ForSkip($"Windows symlink creation is unavailable: {exception.Message}");
+        }
         var scanner = Scanner(directory.Path);
 
         var result = await scanner.ScanAllAsync(TestContext.Current.CancellationToken);
