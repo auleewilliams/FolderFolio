@@ -1,9 +1,11 @@
+using FolderFolio.Domain;
+
 namespace FolderFolio.Imaging;
 
 public interface IImageDerivativeGenerator
 {
     Task WriteWebPAsync(
-        string sourcePath,
+        IndexedPhoto photo,
         Stream destination,
         int maxLongEdge,
         int quality,

@@ -75,3 +75,48 @@ Result: 61 succeeded, 1 skipped, 1 failed. The failure is pre-existing/environme
 ## Concern
 
 The supplied `SegmentIntegrityHandling.Strict` initializer cannot be used with the locked SixLabors.ImageSharp 3.1.12 dependency: its installed `DecoderOptions` has no `SegmentIntegrityHandling` member (confirmed in the package API XML and by compiler error CS0117). The implementation retains the supported decoder hardening available here (`MaxFrames = 1` and bounded decode); adding that exact strict-segment setting requires a dependency/API change outside Task 6 scope.
+
+## Review fix round 1: guarded indexed inputs
+
+### Root-cause trace
+
+The original public `IImageDerivativeGenerator.WriteWebPAsync` accepted an arbitrary `string sourcePath`. Repository-wide call-site tracing found no generator consumers and no call from that boundary to `ISourcePathGuard.TryResolve`. In contrast, the Task 5 `ISourcePathGuard` contract accepts an `IndexedPhoto`, validates its relative path, canonicalizes it under the configured root, rejects reparse points, and compares the indexed length and timestamp to the current file. Therefore any caller could bypass Task 5 simply by passing a raw path directly to the generator.
+
+The fix changes the generator boundary to `WriteWebPAsync(IndexedPhoto, Stream, int, int, CancellationToken)` and requires an `ISourcePathGuard` in the generator constructor. It calls `TryResolve` before identifying or decoding. A rejected source throws `InvalidOperationException` with no bytes written. `Image.IdentifyAsync` now receives supported ImageSharp 3.1.12 decoder options (`MaxFrames = 1`, `SkipMetadata = false`) before the size-dependent bounded decode options are constructed; `TargetSize` cannot be shared before dimensions are known without reintroducing enlargement.
+
+### RED
+
+The updated tests use real temporary JPEG/text files, a real `SourcePathGuard`, `FolderFolioOptions`, and `IndexedPhoto` fingerprints—no mocks.
+
+Command:
+
+```powershell
+dotnet test FolderFolio.slnx --filter FullyQualifiedName~ImageSharpDerivativeGeneratorTests
+```
+
+Result: failed as expected against the raw-path public API. All four calls reported `CS1503` (`IndexedPhoto` cannot convert to `string`), and construction with the Task 5 guard reported `CS1729` (no matching constructor). The tests name the production breaks: bypassing source validation and allowing malformed guarded inputs to leave usable output.
+
+### GREEN
+
+Focused command:
+
+```powershell
+dotnet test FolderFolio.slnx --filter FullyQualifiedName~ImageSharpDerivativeGeneratorTests
+```
+
+Result: passed, 4 total / 4 succeeded / 0 failed. This includes the existing orientation, resize, format, and metadata assertions; a changed-on-disk indexed JPEG is rejected by the guard before the destination receives bytes; and a trusted malformed text file produces `UnknownImageFormatException` with a zero-byte destination.
+
+Full-suite command:
+
+```powershell
+dotnet test FolderFolio.slnx
+```
+
+Result: 63 succeeded, 1 skipped, 1 failed. The only failure remains the environment-dependent `PhotoScannerTests.ScanAllAsync_indexes_only_immediate_supported_files_in_album_and_photo_order` symlink-creation failure on Windows (`A required privilege is not held by the client`); `SourcePathGuardTests.TryResolve_rejects_a_symlink_source` remains skipped for the same reason. No derivative-generator test failed.
+
+### Review self-check
+
+- The public generator method cannot now accept a raw filesystem path; every invocation must supply an `IndexedPhoto`.
+- Removing the guard call makes the changed-fingerprint rejection test fail; allowing decode before guard risks violating the zero-byte assertion.
+- Removing the metadata cleanup, orientation, or no-enlargement condition makes the established output tests fail.
+- `git diff --check` passed before commit (only platform line-ending warnings were emitted).
