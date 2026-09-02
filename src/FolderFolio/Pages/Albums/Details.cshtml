@@ -8,7 +8,7 @@
 
 @if (Model.IsPreparing)
 {
-    <p role="status">Preparing portfolio</p>
+    <p class="portfolio-state" role="status">Preparing portfolio</p>
 }
 else if (Model.Gallery is { } gallery)
 {
@@ -19,12 +19,12 @@ else if (Model.Gallery is { } gallery)
 
     @if (gallery.Photos.Count == 0)
     {
-        <p>This album has no photos yet.</p>
+        <p class="portfolio-state">This album has no photos yet.</p>
     }
     else
     {
         <section aria-label="@gallery.Title photos">
-            <ul>
+            <ul class="gallery-grid">
             @foreach (var photo in gallery.Photos)
             {
                 <li data-photo-tile>

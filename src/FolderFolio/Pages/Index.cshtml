@@ -11,16 +11,16 @@
 
 @if (Model.PageState == IndexPageState.Preparing)
 {
-    <p role="status">Preparing portfolio</p>
+    <p class="portfolio-state" role="status">Preparing portfolio</p>
 }
 else if (Model.PageState == IndexPageState.Empty)
 {
-    <p>Your library is ready for its first album.</p>
+    <p class="portfolio-state">Your library is ready for its first album.</p>
 }
 else
 {
     <section aria-label="Albums">
-        <ul>
+        <ul class="album-grid">
         @foreach (var album in Model.Albums)
         {
             <li>
