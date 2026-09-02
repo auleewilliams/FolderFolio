@@ -102,13 +102,18 @@ public sealed class AlbumDetailsPageTests
         "landscapes",
         1,
         Enumerable.Range(1, photoCount)
-            .Select(position => new IndexedPhoto(
-                position == 1 ? "first" : position == 2 ? "second" : $"photo-{position}",
-                $"{position}.jpg",
-                new SourceFingerprint($"01-Landscapes/{position}.jpg", 1, position),
+            .Select(position =>
+            {
+                var id = position == 1 ? "first" : position == 2 ? "second" : $"photo-{position}";
+                var fileName = $"{id}.jpg";
+                return new IndexedPhoto(
+                id,
+                fileName,
+                new SourceFingerprint($"01-Landscapes/{fileName}", 1, position),
                 null,
                 position == 1 ? 120 : 60,
-                position == 1 ? 80 : 90))
+                position == 1 ? 80 : 90);
+            })
             .ToImmutableArray())));
 
     private static PortfolioViewModelFactory ViewModels() => new(new StubMediaUrlBuilder());
