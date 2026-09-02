@@ -11,17 +11,19 @@ public sealed class PhotoScanner : IPhotoScanner
     private const long MaxDecodedPixelBytes = 512L * 1024 * 1024;
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"
+        ".jpeg", ".jpg", ".png", ".webp"
     };
 
     private readonly string photoRoot;
     private readonly IImageMetadataReader metadataReader;
     private readonly ILogger<PhotoScanner>? logger;
+    private readonly IPhotoScanFileSystem fileSystem;
 
     public PhotoScanner(
         FolderFolioOptions options,
         IImageMetadataReader metadataReader,
-        ILogger<PhotoScanner>? logger = null)
+        ILogger<PhotoScanner>? logger = null,
+        IPhotoScanFileSystem? fileSystem = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(metadataReader);
@@ -29,13 +31,14 @@ public sealed class PhotoScanner : IPhotoScanner
         photoRoot = Path.GetFullPath(options.PhotoRoot);
         this.metadataReader = metadataReader;
         this.logger = logger;
+        this.fileSystem = fileSystem ?? new PhotoScanFileSystem();
     }
 
     public async Task<PhotoScanResult> ScanAllAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!Directory.Exists(photoRoot))
+        if (!fileSystem.DirectoryExists(photoRoot))
         {
             return new PhotoScanResult(PortfolioSnapshot.Empty, 0);
         }
@@ -43,18 +46,24 @@ public sealed class PhotoScanner : IPhotoScanner
         var scannedAlbums = new List<ScannedAlbum>();
         var skippedFileCount = 0;
 
-        foreach (var directoryPath in Directory.EnumerateDirectories(photoRoot, "*", SearchOption.TopDirectoryOnly))
+        foreach (var directoryPath in fileSystem.EnumerateDirectories(photoRoot))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var directoryName = Path.GetFileName(directoryPath);
 
-            if (IsReparsePoint(directoryPath))
+            if (directoryName.Contains('\\'))
             {
+                skippedFileCount++;
+                LogSkippedAlbum(directoryName, "album directory contains an unsupported path character");
                 continue;
             }
 
-            var (album, skipped) = await ScanAlbumAsync(Path.GetFileName(directoryPath), cancellationToken);
-            scannedAlbums.Add(album);
-            skippedFileCount += skipped;
+            var result = await TryScanAlbumAsync(directoryName, cancellationToken);
+            if (result is { } scanned)
+            {
+                scannedAlbums.Add(scanned.Album);
+                skippedFileCount += scanned.SkippedFileCount;
+            }
         }
 
         return new PhotoScanResult(new PortfolioSnapshot(AlbumCatalogBuilder.Build(scannedAlbums)), skippedFileCount);
@@ -85,18 +94,41 @@ public sealed class PhotoScanner : IPhotoScanner
         foreach (var directoryName in targets)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var directoryPath = Path.Combine(photoRoot, directoryName);
-            if (!Directory.Exists(directoryPath) || IsReparsePoint(directoryPath))
+            var result = await TryScanAlbumAsync(directoryName, cancellationToken);
+            if (result is { } scanned)
             {
-                continue;
+                scannedAlbums.Add(scanned.Album);
+                skippedFileCount += scanned.SkippedFileCount;
             }
-
-            var (album, skipped) = await ScanAlbumAsync(directoryName, cancellationToken);
-            scannedAlbums.Add(album);
-            skippedFileCount += skipped;
         }
 
         return new PhotoScanResult(new PortfolioSnapshot(AlbumCatalogBuilder.Build(scannedAlbums)), skippedFileCount);
+    }
+
+    private async Task<(ScannedAlbum Album, int SkippedFileCount)?> TryScanAlbumAsync(
+        string directoryName,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var directoryPath = Path.Combine(photoRoot, directoryName);
+            if (!fileSystem.DirectoryExists(directoryPath) || IsReparsePoint(directoryPath))
+            {
+                return null;
+            }
+
+            return await ScanAlbumAsync(directoryName, cancellationToken);
+        }
+        catch (IOException)
+        {
+            LogSkippedAlbum(directoryName, "album directory could not be read");
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            LogSkippedAlbum(directoryName, "album directory could not be read");
+            return null;
+        }
     }
 
     private async Task<(ScannedAlbum Album, int SkippedFileCount)> ScanAlbumAsync(
@@ -108,19 +140,22 @@ public sealed class PhotoScanner : IPhotoScanner
         var photos = new List<IndexedPhoto>();
         var skippedFileCount = 0;
 
-        foreach (var nestedDirectory in Directory.EnumerateDirectories(directoryPath, "*", SearchOption.TopDirectoryOnly))
+        foreach (var nestedDirectory in fileSystem.EnumerateDirectories(directoryPath))
         {
             cancellationToken.ThrowIfCancellationRequested();
             skippedFileCount++;
         }
 
-        foreach (var sourcePath in Directory.EnumerateFiles(directoryPath, "*", SearchOption.TopDirectoryOnly))
+        foreach (var sourcePath in fileSystem.EnumerateFiles(directoryPath))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             try
             {
-                if (!SupportedExtensions.Contains(Path.GetExtension(sourcePath)) || IsReparsePoint(sourcePath))
+                var fileName = Path.GetFileName(sourcePath);
+                if (fileName.Contains('\\') ||
+                    !SupportedExtensions.Contains(Path.GetExtension(sourcePath)) ||
+                    IsReparsePoint(sourcePath))
                 {
                     skippedFileCount++;
                     continue;
@@ -186,8 +221,8 @@ public sealed class PhotoScanner : IPhotoScanner
     private static ScannedAlbum ToScannedAlbum(IndexedAlbum album) =>
         new(album.DirectoryName, album.Title, album.BaseSlug, album.SortPrefix, album.Photos);
 
-    private static bool IsReparsePoint(string path) =>
-        (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+    private bool IsReparsePoint(string path) =>
+        (fileSystem.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
 
     private static SourceFingerprint ReadFingerprint(string sourcePath, string directoryName)
     {
@@ -199,7 +234,7 @@ public sealed class PhotoScanner : IPhotoScanner
     }
 
     private static string RelativePath(string directoryName, string fileName) =>
-        $"{directoryName}/{fileName}".Replace('\\', '/');
+        $"{directoryName}/{fileName}";
 
     private static void ValidateAlbumDirectoryName(string directoryName)
     {
@@ -216,4 +251,7 @@ public sealed class PhotoScanner : IPhotoScanner
 
     private void LogSkipped(string relativePath, string reason) =>
         logger?.LogWarning("Skipped source photo {RelativePath}: {Reason}", relativePath, reason);
+
+    private void LogSkippedAlbum(string directoryName, string reason) =>
+        logger?.LogWarning("Skipped album {AlbumDirectoryName}: {Reason}", directoryName, reason);
 }

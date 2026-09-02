@@ -131,10 +131,86 @@ public sealed class PhotoScannerTests
         Assert.Equal(1, result.SkippedFileCount);
     }
 
-    private static PhotoScanner Scanner(string photoRoot, IImageMetadataReader? metadataReader = null) =>
+    [Fact]
+    public async Task ScanAllAsync_accepts_only_the_four_contract_image_extensions_case_insensitively()
+    {
+        using var directory = new TemporaryDirectory();
+        var album = directory.CreateDirectory("Formats");
+        foreach (var fileName in new[] { "one.JpG", "two.jPeG", "three.PnG", "four.WeBp" })
+        {
+            ImageFixtureFactory.CreateJpeg(Path.Combine(album, fileName));
+        }
+
+        foreach (var fileName in new[] { "skip.BmP", "skip.GiF", "skip.TiF", "skip.TiFf" })
+        {
+            ImageFixtureFactory.CreateJpeg(Path.Combine(album, fileName));
+        }
+
+        var result = await Scanner(directory.Path).ScanAllAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(["four.WeBp", "one.JpG", "three.PnG", "two.jPeG"], result.Snapshot.Albums[0].Photos.Select(photo => photo.FileName));
+        Assert.Equal(4, result.SkippedFileCount);
+    }
+
+    [Fact]
+    public async Task ScanAllAsync_skips_unix_source_file_names_containing_backslashes()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var directory = new TemporaryDirectory();
+        var album = directory.CreateDirectory("Backslashes");
+        ImageFixtureFactory.CreateJpeg(Path.Combine(album, "literal\\name.jpg"));
+
+        var result = await Scanner(directory.Path).ScanAllAsync(TestContext.Current.CancellationToken);
+
+        Assert.Empty(result.Snapshot.Albums[0].Photos);
+        Assert.Equal(1, result.SkippedFileCount);
+    }
+
+    [Fact]
+    public async Task ScanAllAsync_omits_an_album_whose_directory_enumeration_fails_and_keeps_other_albums()
+    {
+        using var directory = new TemporaryDirectory();
+        var missing = directory.CreateDirectory("Missing");
+        var retained = directory.CreateDirectory("Retained");
+        ImageFixtureFactory.CreateJpeg(Path.Combine(missing, "missing.jpg"));
+        ImageFixtureFactory.CreateJpeg(Path.Combine(retained, "retained.jpg"));
+
+        var result = await Scanner(directory.Path, fileSystem: new ThrowingPhotoScanFileSystem(missing))
+            .ScanAllAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(["Retained"], result.Snapshot.Albums.Select(album => album.DirectoryName));
+    }
+
+    [Fact]
+    public async Task RescanAlbumsAsync_removes_targeted_album_when_its_directory_enumeration_fails()
+    {
+        using var directory = new TemporaryDirectory();
+        var missing = directory.CreateDirectory("Missing");
+        var retained = directory.CreateDirectory("Retained");
+        ImageFixtureFactory.CreateJpeg(Path.Combine(missing, "missing.jpg"));
+        ImageFixtureFactory.CreateJpeg(Path.Combine(retained, "retained.jpg"));
+        var initial = await Scanner(directory.Path).ScanAllAsync(TestContext.Current.CancellationToken);
+
+        var result = await Scanner(directory.Path, fileSystem: new ThrowingPhotoScanFileSystem(missing)).RescanAlbumsAsync(
+            initial.Snapshot,
+            new HashSet<string>(StringComparer.Ordinal) { "Missing" },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(["Retained"], result.Snapshot.Albums.Select(album => album.DirectoryName));
+    }
+
+    private static PhotoScanner Scanner(
+        string photoRoot,
+        IImageMetadataReader? metadataReader = null,
+        IPhotoScanFileSystem? fileSystem = null) =>
         new(
             new FolderFolioOptions { PhotoRoot = photoRoot, CacheRoot = photoRoot },
-            metadataReader ?? new ImageSharpMetadataReader());
+            metadataReader ?? new ImageSharpMetadataReader(),
+            fileSystem: fileSystem);
 
     private sealed class ChangingMetadataReader(string path) : IImageMetadataReader
     {
@@ -149,5 +225,25 @@ public sealed class PhotoScannerTests
     {
         public Task<PhotoSourceMetadata> IdentifyAsync(string sourcePath, CancellationToken cancellationToken) =>
             Task.FromResult(new PhotoSourceMetadata(120, 80, null, (512L * 1024 * 1024) + 1));
+    }
+
+    private sealed class ThrowingPhotoScanFileSystem(string failingDirectory) : IPhotoScanFileSystem
+    {
+        public bool DirectoryExists(string path) => Directory.Exists(path);
+
+        public IEnumerable<string> EnumerateDirectories(string path) =>
+            Directory.EnumerateDirectories(path, "*", SearchOption.TopDirectoryOnly);
+
+        public IEnumerable<string> EnumerateFiles(string path)
+        {
+            if (string.Equals(path, failingDirectory, StringComparison.Ordinal))
+            {
+                throw new DirectoryNotFoundException("Album disappeared.");
+            }
+
+            return Directory.EnumerateFiles(path, "*", SearchOption.TopDirectoryOnly);
+        }
+
+        public FileAttributes GetAttributes(string path) => File.GetAttributes(path);
     }
 }
