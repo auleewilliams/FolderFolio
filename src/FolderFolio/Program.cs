@@ -1,6 +1,7 @@
 using FolderFolio.Configuration;
 using FolderFolio.Imaging;
 using FolderFolio.Indexing;
+using FolderFolio.Web;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,6 +20,7 @@ builder.Services.AddSingleton<IDerivativeKeyFactory, DerivativeKeyFactory>();
 builder.Services.AddSingleton<ISourcePathGuard, SourcePathGuard>();
 builder.Services.AddSingleton<IImageDerivativeGenerator, ImageSharpDerivativeGenerator>();
 builder.Services.AddSingleton<IDerivativeService, DerivativeService>();
+builder.Services.AddSingleton<IMediaUrlBuilder, MediaUrlBuilder>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(provider => new PhotoRootEventMapper(
     provider.GetRequiredService<FolderFolioOptions>().PhotoRoot));
@@ -32,6 +34,10 @@ var app = builder.Build();
 app.UseStaticFiles();
 app.UseRouting();
 app.MapRazorPages();
+app.MapGet(
+    "/media/{albumSlug}/{photoId}/{size}",
+    MediaEndpoint.HandleAsync)
+   .WithName(MediaEndpoint.RouteName);
 
 app.Run();
 
