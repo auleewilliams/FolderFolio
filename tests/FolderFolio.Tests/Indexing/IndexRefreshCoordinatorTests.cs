@@ -74,7 +74,7 @@ public sealed class IndexRefreshCoordinatorTests
     }
 
     [Fact]
-    public async Task A_root_that_disappears_after_the_precheck_cannot_publish_an_empty_ready_snapshot()
+    public async Task A_root_that_disappears_after_the_scanner_availability_check_cannot_publish_an_empty_ready_snapshot()
     {
         using var directory = new TemporaryDirectory();
         var options = new FolderFolioOptions { PhotoRoot = directory.Path, CacheRoot = directory.Path };
@@ -85,22 +85,29 @@ public sealed class IndexRefreshCoordinatorTests
         var clock = new FakeTimeProvider();
         var coordinator = new IndexRefreshCoordinator(
             queue,
-            new PhotoScanner(options, new ImageSharpMetadataReader()),
+            new PhotoScanner(options, new ImageSharpMetadataReader(), fileSystem: new RootLostAfterAvailabilityCheckFileSystem()),
             index,
             clock);
         queue.RequestFullScan();
 
-        var scan = coordinator.ProcessNextBatchAsync(
-            () =>
-            {
-                Directory.Delete(directory.Path, recursive: true);
-                return true;
-            },
-            TestContext.Current.CancellationToken);
+        var scan = coordinator.ProcessNextBatchAsync(TestContext.Current.CancellationToken);
         clock.Advance(TimeSpan.FromMilliseconds(750));
 
         await Assert.ThrowsAsync<DirectoryNotFoundException>(() => scan);
         Assert.Equal(IndexStatus.Degraded, index.Current.Status);
         Assert.Same(lastSuccessfulSnapshot, index.Current.Snapshot);
+    }
+
+    private sealed class RootLostAfterAvailabilityCheckFileSystem : IPhotoScanFileSystem
+    {
+        private int directoryExistsCalls;
+
+        public bool DirectoryExists(string path) => Interlocked.Increment(ref directoryExistsCalls) == 1;
+
+        public IEnumerable<string> EnumerateDirectories(string path) => [];
+
+        public IEnumerable<string> EnumerateFiles(string path) => [];
+
+        public FileAttributes GetAttributes(string path) => throw new InvalidOperationException("No album should be scanned after the root is gone.");
     }
 }

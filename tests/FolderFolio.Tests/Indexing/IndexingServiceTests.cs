@@ -76,7 +76,7 @@ public sealed class IndexingServiceTests
         var options = new FolderFolioOptions { PhotoRoot = directory.Path, CacheRoot = directory.Path };
         var queue = new IndexRefreshQueue();
         var index = new PortfolioIndex();
-        var clock = new FakeTimeProvider();
+        var clock = new RetryObservingTimeProvider();
         var coordinator = new IndexRefreshCoordinator(
             queue,
             new PhotoScanner(options, new ImageSharpMetadataReader()),
@@ -96,11 +96,11 @@ public sealed class IndexingServiceTests
 
         Directory.Delete(directory.Path, recursive: true);
         queue.RequestFullScan();
-        await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+        await clock.QuietPeriodScheduled.Task.WaitAsync(TestContext.Current.CancellationToken);
         clock.Advance(TimeSpan.FromMilliseconds(750));
         await WaitUntilAsync(() => index.Current.Status == IndexStatus.Degraded, TestContext.Current.CancellationToken);
         var degradedGeneration = index.Current.Generation;
-        await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+        await clock.RetryDelayScheduled.Task.WaitAsync(TestContext.Current.CancellationToken);
         clock.Advance(TimeSpan.FromSeconds(5));
         await WaitUntilAsync(() => index.Current.Generation > degradedGeneration, TestContext.Current.CancellationToken);
 
@@ -132,5 +132,36 @@ public sealed class IndexingServiceTests
         public void Start() => Started = true;
 
         public void Dispose() { }
+    }
+
+    private sealed class RetryObservingTimeProvider : TimeProvider
+    {
+        private readonly FakeTimeProvider clock = new();
+
+        public TaskCompletionSource RetryDelayScheduled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource QuietPeriodScheduled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override DateTimeOffset GetUtcNow() => clock.GetUtcNow();
+
+        public override long GetTimestamp() => clock.GetTimestamp();
+
+        public override long TimestampFrequency => clock.TimestampFrequency;
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            if (dueTime == TimeSpan.FromSeconds(5))
+            {
+                RetryDelayScheduled.TrySetResult();
+            }
+            else if (dueTime == TimeSpan.FromMilliseconds(750))
+            {
+                QuietPeriodScheduled.TrySetResult();
+            }
+
+            return clock.CreateTimer(callback, state, dueTime, period);
+        }
+
+        public void Advance(TimeSpan timeSpan) => clock.Advance(timeSpan);
     }
 }

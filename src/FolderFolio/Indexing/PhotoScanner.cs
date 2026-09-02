@@ -66,6 +66,11 @@ public sealed class PhotoScanner : IPhotoScanner
             }
         }
 
+        if (!fileSystem.DirectoryExists(photoRoot))
+        {
+            throw new DirectoryNotFoundException("The photo root is unavailable.");
+        }
+
         return new PhotoScanResult(new PortfolioSnapshot(AlbumCatalogBuilder.Build(scannedAlbums)), skippedFileCount);
     }
 
