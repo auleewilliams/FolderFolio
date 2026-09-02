@@ -1,4 +1,5 @@
 using FolderFolio.Configuration;
+using FolderFolio.Imaging;
 using FolderFolio.Indexing;
 using Microsoft.Extensions.Options;
 
@@ -14,6 +15,10 @@ builder.Services.AddSingleton<IPhotoScanFileSystem, PhotoScanFileSystem>();
 builder.Services.AddSingleton<IImageMetadataReader, ImageSharpMetadataReader>();
 builder.Services.AddSingleton<IPhotoScanner, PhotoScanner>();
 builder.Services.AddSingleton<IIndexRefreshQueue, IndexRefreshQueue>();
+builder.Services.AddSingleton<IDerivativeKeyFactory, DerivativeKeyFactory>();
+builder.Services.AddSingleton<ISourcePathGuard, SourcePathGuard>();
+builder.Services.AddSingleton<IImageDerivativeGenerator, ImageSharpDerivativeGenerator>();
+builder.Services.AddSingleton<IDerivativeService, DerivativeService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(provider => new PhotoRootEventMapper(
     provider.GetRequiredService<FolderFolioOptions>().PhotoRoot));
