@@ -41,7 +41,7 @@ else if (Model.Gallery is { } gallery)
                              loading="@(photo.LoadEagerly ? "eager" : "lazy")"
                              fetchpriority="@(photo.LoadEagerly ? "high" : null)"
                              decoding="async" />
-                        <span hidden role="status">Image unavailable</span>
+                        <span data-image-unavailable hidden role="status">Image unavailable</span>
                     </button>
                 </li>
             }
