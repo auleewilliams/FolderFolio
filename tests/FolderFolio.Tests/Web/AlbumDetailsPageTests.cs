@@ -36,6 +36,18 @@ public sealed class AlbumDetailsPageTests
     }
 
     [Fact]
+    public void OnGet_marks_only_the_first_four_photos_for_eager_loading()
+    {
+        var model = new DetailsModel(ReadyIndex(Snapshot(5)), ViewModels());
+
+        model.OnGet("landscapes");
+
+        var gallery = Assert.IsType<AlbumGalleryViewModel>(model.Gallery);
+        Assert.All(gallery.Photos.Take(4), photo => Assert.True(photo.LoadEagerly));
+        Assert.False(gallery.Photos[4].LoadEagerly);
+    }
+
+    [Fact]
     public void OnGet_returns_not_found_for_an_unknown_album_after_a_successful_scan()
     {
         var model = new DetailsModel(ReadyIndex(Snapshot()), ViewModels());
@@ -83,15 +95,21 @@ public sealed class AlbumDetailsPageTests
 
     private static int Count(string value, string fragment) => value.Split(fragment, StringSplitOptions.None).Length - 1;
 
-    private static PortfolioSnapshot Snapshot() => new(ImmutableArray.Create(new IndexedAlbum(
+    private static PortfolioSnapshot Snapshot(int photoCount = 2) => new(ImmutableArray.Create(new IndexedAlbum(
         "01-Landscapes",
         "landscapes",
         "Landscapes",
         "landscapes",
         1,
-        ImmutableArray.Create(
-            new IndexedPhoto("first", "first.jpg", new SourceFingerprint("01-Landscapes/first.jpg", 1, 1), null, 120, 80),
-            new IndexedPhoto("second", "second.jpg", new SourceFingerprint("01-Landscapes/second.jpg", 1, 2), null, 60, 90)))));
+        Enumerable.Range(1, photoCount)
+            .Select(position => new IndexedPhoto(
+                position == 1 ? "first" : position == 2 ? "second" : $"photo-{position}",
+                $"{position}.jpg",
+                new SourceFingerprint($"01-Landscapes/{position}.jpg", 1, position),
+                null,
+                position == 1 ? 120 : 60,
+                position == 1 ? 80 : 90))
+            .ToImmutableArray())));
 
     private static PortfolioViewModelFactory ViewModels() => new(new StubMediaUrlBuilder());
 

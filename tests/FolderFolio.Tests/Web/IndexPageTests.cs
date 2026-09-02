@@ -53,6 +53,19 @@ public sealed class IndexPageTests
     }
 
     [Fact]
+    public void OnGet_keeps_the_last_successful_snapshot_readable_when_degraded()
+    {
+        var index = ReadyIndex(Snapshot());
+        index.MarkDegraded("The source volume is temporarily unavailable.");
+        var model = new IndexModel(index, Options(), ViewModels());
+
+        model.OnGet();
+
+        Assert.Equal(IndexPageState.Populated, model.PageState);
+        Assert.Single(model.Albums);
+    }
+
+    [Fact]
     public async Task Home_page_renders_an_album_card_without_source_paths()
     {
         using var root = new TemporaryDirectory();
