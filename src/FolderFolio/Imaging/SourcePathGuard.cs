@@ -12,7 +12,10 @@ public sealed class SourcePathGuard : ISourcePathGuard
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        _canonicalPhotoRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(options.PhotoRoot)) + Path.DirectorySeparatorChar;
+        var canonicalPhotoRoot = Path.GetFullPath(options.PhotoRoot);
+        _canonicalPhotoRoot = Path.EndsInDirectorySeparator(canonicalPhotoRoot)
+            ? canonicalPhotoRoot
+            : canonicalPhotoRoot + Path.DirectorySeparatorChar;
         _pathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
     }
 

@@ -24,6 +24,21 @@ public sealed class SourcePathGuardTests
         Assert.Equal(Path.GetFullPath(path), sourcePath);
     }
 
+    [Fact]
+    public void TryResolve_accepts_a_matching_photo_when_the_trusted_root_is_a_filesystem_root()
+    {
+        using var directory = new TemporaryDirectory();
+        var path = directory.FilePath("photo.jpg");
+        File.WriteAllText(path, "photo");
+        var root = Path.GetPathRoot(directory.Path)!;
+        var relativePath = Path.GetRelativePath(root, path);
+
+        var resolved = new SourcePathGuard(new FolderFolioOptions { PhotoRoot = root }).TryResolve(Photo(relativePath, path), out var sourcePath);
+
+        Assert.True(resolved);
+        Assert.Equal(Path.GetFullPath(path), sourcePath);
+    }
+
     [Theory]
     [InlineData("../outside.jpg")]
     [InlineData("/outside.jpg")]
