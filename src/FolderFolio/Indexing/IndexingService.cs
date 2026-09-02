@@ -56,7 +56,15 @@ public sealed class IndexingService : BackgroundService
         {
             if (!Directory.Exists(photoRoot))
             {
-                index.MarkStarting("Photo root is unavailable.");
+                if (hasPublishedSuccessfully)
+                {
+                    index.MarkDegraded("Photo root is unavailable.");
+                }
+                else
+                {
+                    index.MarkStarting("Photo root is unavailable.");
+                }
+
                 await Task.Delay(RetryDelay, timeProvider, stoppingToken).ConfigureAwait(false);
                 continue;
             }

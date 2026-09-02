@@ -40,7 +40,7 @@ public sealed class PhotoScanner : IPhotoScanner
 
         if (!fileSystem.DirectoryExists(photoRoot))
         {
-            return new PhotoScanResult(PortfolioSnapshot.Empty, 0);
+            throw new DirectoryNotFoundException("The photo root is unavailable.");
         }
 
         var scannedAlbums = new List<ScannedAlbum>();

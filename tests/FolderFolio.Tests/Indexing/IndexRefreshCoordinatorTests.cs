@@ -1,4 +1,5 @@
 using FolderFolio.Domain;
+using FolderFolio.Configuration;
 using FolderFolio.Indexing;
 using FolderFolio.Tests.Support;
 using Microsoft.Extensions.Time.Testing;
@@ -70,5 +71,36 @@ public sealed class IndexRefreshCoordinatorTests
 
         Assert.Equal(IndexStatus.Degraded, index.Current.Status);
         Assert.Same(snapshot, index.Current.Snapshot);
+    }
+
+    [Fact]
+    public async Task A_root_that_disappears_after_the_precheck_cannot_publish_an_empty_ready_snapshot()
+    {
+        using var directory = new TemporaryDirectory();
+        var options = new FolderFolioOptions { PhotoRoot = directory.Path, CacheRoot = directory.Path };
+        var queue = new IndexRefreshQueue();
+        var index = new PortfolioIndex();
+        var lastSuccessfulSnapshot = PortfolioSnapshot.Empty;
+        index.PublishReady(lastSuccessfulSnapshot, DateTimeOffset.UtcNow, TimeSpan.Zero);
+        var clock = new FakeTimeProvider();
+        var coordinator = new IndexRefreshCoordinator(
+            queue,
+            new PhotoScanner(options, new ImageSharpMetadataReader()),
+            index,
+            clock);
+        queue.RequestFullScan();
+
+        var scan = coordinator.ProcessNextBatchAsync(
+            () =>
+            {
+                Directory.Delete(directory.Path, recursive: true);
+                return true;
+            },
+            TestContext.Current.CancellationToken);
+        clock.Advance(TimeSpan.FromMilliseconds(750));
+
+        await Assert.ThrowsAsync<DirectoryNotFoundException>(() => scan);
+        Assert.Equal(IndexStatus.Degraded, index.Current.Status);
+        Assert.Same(lastSuccessfulSnapshot, index.Current.Snapshot);
     }
 }

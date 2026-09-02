@@ -68,7 +68,7 @@ public sealed class IndexingServiceTests
     }
 
     [Fact]
-    public async Task A_root_that_disappears_after_a_successful_scan_degrades_and_retains_the_last_snapshot()
+    public async Task A_root_that_disappears_after_a_successful_scan_remains_degraded_through_the_retry_loop()
     {
         using var directory = new TemporaryDirectory();
         var album = directory.CreateDirectory("01-Trip");
@@ -76,18 +76,19 @@ public sealed class IndexingServiceTests
         var options = new FolderFolioOptions { PhotoRoot = directory.Path, CacheRoot = directory.Path };
         var queue = new IndexRefreshQueue();
         var index = new PortfolioIndex();
+        var clock = new FakeTimeProvider();
         var coordinator = new IndexRefreshCoordinator(
             queue,
             new PhotoScanner(options, new ImageSharpMetadataReader()),
             index,
-            TimeProvider.System);
+            clock);
         using var service = new IndexingService(
             options,
             queue,
             coordinator,
             index,
             new RecordingPhotoRootWatcher(),
-            TimeProvider.System);
+            clock);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
         await WaitUntilAsync(() => index.Current.Status == IndexStatus.Ready, TestContext.Current.CancellationToken);
@@ -95,9 +96,15 @@ public sealed class IndexingServiceTests
 
         Directory.Delete(directory.Path, recursive: true);
         queue.RequestFullScan();
-
+        await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+        clock.Advance(TimeSpan.FromMilliseconds(750));
         await WaitUntilAsync(() => index.Current.Status == IndexStatus.Degraded, TestContext.Current.CancellationToken);
+        var degradedGeneration = index.Current.Generation;
+        await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        await WaitUntilAsync(() => index.Current.Generation > degradedGeneration, TestContext.Current.CancellationToken);
 
+        Assert.Equal(IndexStatus.Degraded, index.Current.Status);
         Assert.Same(lastSuccessfulSnapshot, index.Current.Snapshot);
         await service.StopAsync(TestContext.Current.CancellationToken);
     }
