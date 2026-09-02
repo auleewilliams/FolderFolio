@@ -3,6 +3,7 @@ using FolderFolio.Domain;
 using FolderFolio.Imaging;
 using FolderFolio.Indexing;
 using FolderFolio.Tests.Support;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace FolderFolio.Tests.Web;
@@ -10,22 +11,24 @@ namespace FolderFolio.Tests.Web;
 public sealed class MediaEndpointTests : IDisposable
 {
     private readonly TemporaryDirectory _directory = new();
+    private readonly TemporaryDirectory _photoRoot = new();
 
     [Fact]
     public async Task A_current_version_returns_the_webp_with_immutable_cache_metadata()
     {
         var (album, photo, derivative, factory) = CreateFixture();
-        using var app = new FolderFolioWebApplicationFactory(new PortfolioSnapshot(ImmutableArray.Create(album)), derivative);
+        using var app = new FolderFolioWebApplicationFactory(new PortfolioSnapshot(ImmutableArray.Create(album)), derivative, _photoRoot.Path);
         using var client = app.CreateClient();
         var version = factory.Create(photo, DerivativeKind.Grid).Version;
 
         var response = await client.GetAsync($"/media/landscapes/{Uri.EscapeDataString(photo.Id)}/grid?v={version}", TestContext.Current.CancellationToken);
 
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(_photoRoot.Path, app.Services.GetRequiredService<FolderFolio.Configuration.FolderFolioOptions>().PhotoRoot);
         Assert.Equal("image/webp", response.Content.Headers.ContentType?.MediaType);
         Assert.Equal(factory.Create(photo, DerivativeKind.Grid).ETag, response.Headers.ETag?.Tag);
         Assert.Equal("public,max-age=31536000,immutable", response.Headers.CacheControl?.ToString().Replace(" ", string.Empty));
-        Assert.DoesNotContain(_directory.Path, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.Ordinal);
+        await AssertDoesNotDisclosePhotoRoot(response);
     }
 
     [Theory]
@@ -37,13 +40,14 @@ public sealed class MediaEndpointTests : IDisposable
     public async Task An_unresolvable_media_lookup_returns_not_found(string albumSlug, string photoId, string size, string version)
     {
         var (album, _, derivative, _) = CreateFixture();
-        using var app = new FolderFolioWebApplicationFactory(new PortfolioSnapshot(ImmutableArray.Create(album)), derivative);
+        using var app = new FolderFolioWebApplicationFactory(new PortfolioSnapshot(ImmutableArray.Create(album)), derivative, _photoRoot.Path);
         using var client = app.CreateClient();
         var query = version.Length == 0 ? string.Empty : $"?v={version}";
 
         var response = await client.GetAsync($"/media/{albumSlug}/{photoId}/{size}{query}", TestContext.Current.CancellationToken);
 
         Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        await AssertDoesNotDisclosePhotoRoot(response);
     }
 
     [Fact]
@@ -51,18 +55,33 @@ public sealed class MediaEndpointTests : IDisposable
     {
         var (album, photo, derivative, factory) = CreateFixture();
         derivative.ThrowStaleSource = true;
-        using var app = new FolderFolioWebApplicationFactory(new PortfolioSnapshot(ImmutableArray.Create(album)), derivative);
+        using var app = new FolderFolioWebApplicationFactory(new PortfolioSnapshot(ImmutableArray.Create(album)), derivative, _photoRoot.Path);
         using var client = app.CreateClient();
 
         var response = await client.GetAsync($"/media/landscapes/{photo.Id}/grid?v={factory.Create(photo, DerivativeKind.Grid).Version}", TestContext.Current.CancellationToken);
 
         Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        await AssertDoesNotDisclosePhotoRoot(response);
         Assert.True(app.RefreshQueue.TryRead(out var request));
         Assert.False(request.FullScan);
         Assert.Equal([album.DirectoryName], request.AlbumDirectoryNames);
     }
 
-    public void Dispose() => _directory.Dispose();
+    public void Dispose()
+    {
+        _photoRoot.Dispose();
+        _directory.Dispose();
+    }
+
+    private async Task AssertDoesNotDisclosePhotoRoot(HttpResponseMessage response)
+    {
+        var responseText = $"{response}\n{await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}";
+
+        Assert.DoesNotContain(
+            _photoRoot.Path,
+            responseText,
+            StringComparison.Ordinal);
+    }
 
     private (IndexedAlbum Album, IndexedPhoto Photo, StubDerivativeService Derivative, DerivativeKeyFactory KeyFactory) CreateFixture()
     {
