@@ -2,6 +2,7 @@ using FolderFolio.Configuration;
 using FolderFolio.Imaging;
 using FolderFolio.Indexing;
 using FolderFolio.Web;
+using FolderFolio.Web.ViewModels;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +22,7 @@ builder.Services.AddSingleton<ISourcePathGuard, SourcePathGuard>();
 builder.Services.AddSingleton<IImageDerivativeGenerator, ImageSharpDerivativeGenerator>();
 builder.Services.AddSingleton<IDerivativeService, DerivativeService>();
 builder.Services.AddSingleton<IMediaUrlBuilder, MediaUrlBuilder>();
+builder.Services.AddSingleton<PortfolioViewModelFactory>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(provider => new PhotoRootEventMapper(
     provider.GetRequiredService<FolderFolioOptions>().PhotoRoot));

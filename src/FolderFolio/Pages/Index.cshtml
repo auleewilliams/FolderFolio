@@ -1,0 +1,48 @@
+@page
+@model FolderFolio.Pages.IndexModel
+@{
+    ViewData["Title"] = Model.SiteTitle;
+}
+
+<header>
+    <h1>@Model.SiteTitle</h1>
+    <p>@Model.Tagline</p>
+</header>
+
+@if (Model.PageState == IndexPageState.Preparing)
+{
+    <p role="status">Preparing portfolio</p>
+}
+else if (Model.PageState == IndexPageState.Empty)
+{
+    <p>Your library is ready for its first album.</p>
+}
+else
+{
+    <section aria-label="Albums">
+        <ul>
+        @foreach (var album in Model.Albums)
+        {
+            <li>
+                <a asp-page="/Albums/Details" asp-route-slug="@album.Slug">
+                    @if (album.CoverUrl.Length > 0)
+                    {
+                        <img src="@album.CoverUrl"
+                             alt="@($"{album.Title} album cover")"
+                             width="@album.CoverWidth"
+                             height="@album.CoverHeight"
+                             loading="lazy"
+                             decoding="async" />
+                    }
+                    else
+                    {
+                        <span aria-hidden="true">No photos yet</span>
+                    }
+                    <span>@album.Title</span>
+                    <span>@album.PhotoCount @(album.PhotoCount == 1 ? "photo" : "photos")</span>
+                </a>
+            </li>
+        }
+        </ul>
+    </section>
+}
