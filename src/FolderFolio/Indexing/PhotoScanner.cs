@@ -83,6 +83,11 @@ public sealed class PhotoScanner : IPhotoScanner
         ArgumentNullException.ThrowIfNull(albumDirectoryNames);
         cancellationToken.ThrowIfCancellationRequested();
 
+        if (!fileSystem.DirectoryExists(photoRoot))
+        {
+            throw new DirectoryNotFoundException("The photo root is unavailable.");
+        }
+
         var targets = new HashSet<string>(StringComparer.Ordinal);
         foreach (var directoryName in albumDirectoryNames)
         {
@@ -105,6 +110,11 @@ public sealed class PhotoScanner : IPhotoScanner
                 scannedAlbums.Add(scanned.Album);
                 skippedFileCount += scanned.SkippedFileCount;
             }
+        }
+
+        if (!fileSystem.DirectoryExists(photoRoot))
+        {
+            throw new DirectoryNotFoundException("The photo root is unavailable.");
         }
 
         return new PhotoScanResult(new PortfolioSnapshot(AlbumCatalogBuilder.Build(scannedAlbums)), skippedFileCount);

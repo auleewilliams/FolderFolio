@@ -1,5 +1,7 @@
 # FolderFolio MVP implementation checkpoint
 
+> **Superseded status:** This is a historical mid-implementation checkpoint, not the current project status. Task 4 and all later MVP tasks were subsequently completed and reviewed. See the current execution ledger at `.superpowers/sdd/2026-09-01-folderfolio-mvp/progress.md` for the authoritative status and later review history.
+
 ## Repository state
 
 - Worktree: `/Users/leew/Code/FolderFolio/.worktrees/folderfolio-mvp`

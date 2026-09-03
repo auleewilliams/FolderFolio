@@ -13,7 +13,7 @@ namespace FolderFolio.Tests.Support;
 
 public sealed class FolderFolioWebApplicationFactory(
     PortfolioSnapshot snapshot,
-    StubDerivativeService derivativeService,
+    IDerivativeService derivativeService,
     string photoRoot) : WebApplicationFactory<Program>
 {
     public IIndexRefreshQueue RefreshQueue => Services.GetRequiredService<IIndexRefreshQueue>();
@@ -23,7 +23,8 @@ public sealed class FolderFolioWebApplicationFactory(
         builder.ConfigureAppConfiguration((_, configuration) =>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["FolderFolio:PhotoRoot"] = photoRoot
+                ["FolderFolio:PhotoRoot"] = photoRoot,
+                ["FolderFolio:CacheRoot"] = Path.Combine(photoRoot, "cache")
             }));
         builder.ConfigureTestServices(services =>
         {

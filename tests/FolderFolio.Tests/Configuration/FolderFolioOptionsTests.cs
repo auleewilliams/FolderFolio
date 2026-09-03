@@ -59,8 +59,34 @@ public sealed class FolderFolioOptionsTests
     [Fact]
     public void Validator_accepts_a_valid_configuration()
     {
-        var result = new FolderFolioOptionsValidator().Validate(null, new FolderFolioOptions());
+        var fullyQualifiedRoot = Path.GetFullPath(Path.GetTempPath());
+        var result = new FolderFolioOptionsValidator().Validate(null, new FolderFolioOptions
+        {
+            PhotoRoot = fullyQualifiedRoot,
+            CacheRoot = fullyQualifiedRoot
+        });
 
         Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public void Validator_rejects_windows_drive_relative_photo_and_cache_roots()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            throw Xunit.Sdk.SkipException.ForSkip("Drive-relative rooted paths are a Windows path form.");
+        }
+
+        var options = new FolderFolioOptions
+        {
+            PhotoRoot = @"C:photos",
+            CacheRoot = @"D:cache"
+        };
+
+        var result = new FolderFolioOptionsValidator().Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Failures!, value => value.Contains(nameof(options.PhotoRoot), StringComparison.Ordinal));
+        Assert.Contains(result.Failures!, value => value.Contains(nameof(options.CacheRoot), StringComparison.Ordinal));
     }
 }

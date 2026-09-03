@@ -60,9 +60,22 @@ public sealed class FileSystemPhotoRootWatcher : IPhotoRootWatcher
             }
 
             disposed = true;
-            watcher?.Dispose();
-            watcher = null;
+            StopCore();
         }
+    }
+
+    public void Stop()
+    {
+        lock (sync)
+        {
+            StopCore();
+        }
+    }
+
+    private void StopCore()
+    {
+        watcher?.Dispose();
+        watcher = null;
     }
 
     private void OnPathChanged(object sender, FileSystemEventArgs eventArgs) => Dispatch(mapper.MapPath(eventArgs.FullPath));

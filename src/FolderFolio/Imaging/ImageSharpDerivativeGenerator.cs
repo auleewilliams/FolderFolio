@@ -30,7 +30,7 @@ public sealed class ImageSharpDerivativeGenerator : IImageDerivativeGenerator
 
         if (!_sourcePathGuard.TryResolve(photo, out var sourcePath))
         {
-            throw new InvalidOperationException("The indexed photo source is not trusted.");
+            throw new StaleSourceException();
         }
 
         var identificationOptions = new DecoderOptions
@@ -38,7 +38,17 @@ public sealed class ImageSharpDerivativeGenerator : IImageDerivativeGenerator
             MaxFrames = 1,
             SkipMetadata = false
         };
-        var sourceInfo = await Image.IdentifyAsync(identificationOptions, sourcePath, cancellationToken);
+        ImageInfo sourceInfo;
+        try
+        {
+            sourceInfo = await Image.IdentifyAsync(identificationOptions, sourcePath, cancellationToken);
+        }
+        catch (Exception exception) when (IsExpectedSourceReadFailure(exception))
+        {
+            ThrowIfSourceBecameStale(photo);
+            throw;
+        }
+
         var decoderOptions = sourceInfo.Width > maxLongEdge || sourceInfo.Height > maxLongEdge
             ? new DecoderOptions
             {
@@ -52,26 +62,50 @@ public sealed class ImageSharpDerivativeGenerator : IImageDerivativeGenerator
                 SkipMetadata = false
             };
 
-        using var image = await Image.LoadAsync(decoderOptions, sourcePath, cancellationToken);
-        image.Mutate(context => context.AutoOrient());
-        if (image.Width > maxLongEdge || image.Height > maxLongEdge)
+        Image image;
+        try
         {
-            image.Mutate(context => context.Resize(new ResizeOptions
-            {
-                Size = new Size(maxLongEdge, maxLongEdge),
-                Mode = ResizeMode.Max
-            }));
+            image = await Image.LoadAsync(decoderOptions, sourcePath, cancellationToken);
         }
-        image.Metadata.ExifProfile = null;
-        image.Metadata.IptcProfile = null;
-        image.Metadata.XmpProfile = null;
-
-        var encoder = new WebpEncoder
+        catch (Exception exception) when (IsExpectedSourceReadFailure(exception))
         {
-            FileFormat = WebpFileFormatType.Lossy,
-            Quality = quality,
-            SkipMetadata = true
-        };
-        await image.SaveAsWebpAsync(destination, encoder, cancellationToken);
+            ThrowIfSourceBecameStale(photo);
+            throw;
+        }
+
+        using (image)
+        {
+            image.Mutate(context => context.AutoOrient());
+            if (image.Width > maxLongEdge || image.Height > maxLongEdge)
+            {
+                image.Mutate(context => context.Resize(new ResizeOptions
+                {
+                    Size = new Size(maxLongEdge, maxLongEdge),
+                    Mode = ResizeMode.Max
+                }));
+            }
+            image.Metadata.ExifProfile = null;
+            image.Metadata.IptcProfile = null;
+            image.Metadata.XmpProfile = null;
+
+            var encoder = new WebpEncoder
+            {
+                FileFormat = WebpFileFormatType.Lossy,
+                Quality = quality,
+                SkipMetadata = true
+            };
+            await image.SaveAsWebpAsync(destination, encoder, cancellationToken);
+        }
+    }
+
+    private static bool IsExpectedSourceReadFailure(Exception exception) =>
+        exception is IOException or UnauthorizedAccessException or ImageFormatException;
+
+    private void ThrowIfSourceBecameStale(IndexedPhoto photo)
+    {
+        if (!_sourcePathGuard.TryResolve(photo, out _))
+        {
+            throw new StaleSourceException();
+        }
     }
 }

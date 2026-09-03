@@ -93,7 +93,8 @@ public sealed class HealthEndpointTests
             builder.ConfigureAppConfiguration((_, configuration) =>
                 configuration.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["FolderFolio:PhotoRoot"] = Path.GetTempPath()
+                    ["FolderFolio:PhotoRoot"] = Path.GetTempPath(),
+                    ["FolderFolio:CacheRoot"] = Path.GetTempPath()
                 }));
             builder.ConfigureTestServices(services =>
             {

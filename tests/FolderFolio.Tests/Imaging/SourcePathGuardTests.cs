@@ -2,6 +2,7 @@ using FolderFolio.Configuration;
 using FolderFolio.Domain;
 using FolderFolio.Imaging;
 using FolderFolio.Tests.Support;
+using System.Diagnostics;
 using Xunit;
 
 namespace FolderFolio.Tests.Imaging;
@@ -78,6 +79,38 @@ public sealed class SourcePathGuardTests
     }
 
     [Fact]
+    public void TryResolve_rejects_a_source_beneath_a_symlinked_parent_directory()
+    {
+        using var directory = new TemporaryDirectory();
+        var root = directory.CreateDirectory("photos");
+        var outsideAlbum = directory.CreateDirectory("outside-album");
+        var target = Path.Combine(outsideAlbum, "photo.jpg");
+        var linkedAlbum = Path.Combine(root, "linked-album");
+        File.WriteAllText(target, "photo");
+        try
+        {
+            Directory.CreateSymbolicLink(linkedAlbum, outsideAlbum);
+        }
+        catch (IOException exception) when (OperatingSystem.IsWindows())
+        {
+            CreateDirectoryJunctionOrSkip(linkedAlbum, outsideAlbum, exception);
+        }
+
+        try
+        {
+            var resolved = new SourcePathGuard(new FolderFolioOptions { PhotoRoot = root }).TryResolve(
+                Photo("linked-album/photo.jpg", target),
+                out _);
+
+            Assert.False(resolved);
+        }
+        finally
+        {
+            Directory.Delete(linkedAlbum);
+        }
+    }
+
+    [Fact]
     public void TryResolve_rejects_missing_and_changed_fingerprint_sources()
     {
         using var directory = new TemporaryDirectory();
@@ -102,5 +135,30 @@ public sealed class SourcePathGuardTests
     {
         var info = new FileInfo(sourcePath);
         return new IndexedPhoto("photo-id", Path.GetFileName(relativePath), new SourceFingerprint(relativePath, info.Length, info.LastWriteTimeUtc.Ticks), null, 120, 80);
+    }
+
+    private static void CreateDirectoryJunctionOrSkip(string linkPath, string targetPath, IOException symlinkException)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add("/d");
+        startInfo.ArgumentList.Add("/c");
+        startInfo.ArgumentList.Add("mklink");
+        startInfo.ArgumentList.Add("/J");
+        startInfo.ArgumentList.Add(linkPath);
+        startInfo.ArgumentList.Add(targetPath);
+
+        using var process = Process.Start(startInfo);
+        process?.WaitForExit();
+        if (process is null || process.ExitCode != 0)
+        {
+            throw Xunit.Sdk.SkipException.ForSkip($"Windows symlink creation is unavailable: {symlinkException.Message}");
+        }
     }
 }

@@ -68,7 +68,7 @@ public sealed class ImageSharpDerivativeGeneratorTests
         File.AppendAllText(sourcePath, "changed after indexing");
         await using var destination = new MemoryStream();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<StaleSourceException>(() =>
             Generator(root).WriteWebPAsync(indexedPhoto, destination, maxLongEdge: 50, quality: 80, TestContext.Current.CancellationToken));
 
         Assert.Equal(0, destination.Length);
@@ -89,6 +89,30 @@ public sealed class ImageSharpDerivativeGeneratorTests
         Assert.Equal(0, destination.Length);
     }
 
+    [Fact]
+    public async Task WriteWebPAsync_translates_an_expected_read_failure_to_stale_when_the_source_is_no_longer_current()
+    {
+        using var directory = new TemporaryDirectory();
+        var root = directory.CreateDirectory("photos");
+        var sourcePath = Path.Combine(root, "removed.jpg");
+        ImageFixtureFactory.CreateJpeg(sourcePath);
+        var photo = Photo(root, sourcePath);
+        var guard = new RemoveSourceAfterFirstResolutionGuard(
+            new SourcePathGuard(new FolderFolioOptions { PhotoRoot = root }),
+            sourcePath);
+        await using var destination = new MemoryStream();
+
+        await Assert.ThrowsAsync<StaleSourceException>(() =>
+            new ImageSharpDerivativeGenerator(guard).WriteWebPAsync(
+                photo,
+                destination,
+                maxLongEdge: 50,
+                quality: 80,
+                TestContext.Current.CancellationToken));
+
+        Assert.Equal(0, destination.Length);
+    }
+
     private static ImageSharpDerivativeGenerator Generator(string root) =>
         new(new SourcePathGuard(new FolderFolioOptions { PhotoRoot = root }));
 
@@ -102,5 +126,21 @@ public sealed class ImageSharpDerivativeGeneratorTests
             null,
             120,
             80);
+    }
+
+    private sealed class RemoveSourceAfterFirstResolutionGuard(ISourcePathGuard inner, string sourcePath) : ISourcePathGuard
+    {
+        private int resolutionCount;
+
+        public bool TryResolve(IndexedPhoto photo, out string resolvedPath)
+        {
+            var resolved = inner.TryResolve(photo, out resolvedPath);
+            if (Interlocked.Increment(ref resolutionCount) == 1 && resolved)
+            {
+                File.Delete(sourcePath);
+            }
+
+            return resolved;
+        }
     }
 }

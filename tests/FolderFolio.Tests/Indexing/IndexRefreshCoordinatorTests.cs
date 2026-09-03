@@ -98,6 +98,34 @@ public sealed class IndexRefreshCoordinatorTests
         Assert.Same(lastSuccessfulSnapshot, index.Current.Snapshot);
     }
 
+    [Fact]
+    public async Task A_root_that_disappears_during_a_targeted_scan_cannot_publish_a_ready_snapshot()
+    {
+        using var directory = new TemporaryDirectory();
+        var options = new FolderFolioOptions { PhotoRoot = directory.Path, CacheRoot = directory.Path };
+        var queue = new IndexRefreshQueue();
+        var index = new PortfolioIndex();
+        var lastSuccessfulSnapshot = PortfolioSnapshot.Empty;
+        index.PublishReady(lastSuccessfulSnapshot, DateTimeOffset.UtcNow, TimeSpan.Zero);
+        var clock = new FakeTimeProvider();
+        var coordinator = new IndexRefreshCoordinator(
+            queue,
+            new PhotoScanner(
+                options,
+                new ImageSharpMetadataReader(),
+                fileSystem: new RootLostDuringTargetedScanFileSystem(directory.Path)),
+            index,
+            clock);
+        queue.RequestAlbum("01-Trip");
+
+        var scan = coordinator.ProcessNextBatchAsync(TestContext.Current.CancellationToken);
+        clock.Advance(TimeSpan.FromMilliseconds(750));
+
+        await Assert.ThrowsAsync<DirectoryNotFoundException>(() => scan);
+        Assert.Equal(IndexStatus.Degraded, index.Current.Status);
+        Assert.Same(lastSuccessfulSnapshot, index.Current.Snapshot);
+    }
+
     private sealed class RootLostAfterAvailabilityCheckFileSystem : IPhotoScanFileSystem
     {
         private int directoryExistsCalls;
@@ -109,5 +137,20 @@ public sealed class IndexRefreshCoordinatorTests
         public IEnumerable<string> EnumerateFiles(string path) => [];
 
         public FileAttributes GetAttributes(string path) => throw new InvalidOperationException("No album should be scanned after the root is gone.");
+    }
+
+    private sealed class RootLostDuringTargetedScanFileSystem(string photoRoot) : IPhotoScanFileSystem
+    {
+        private int rootAvailabilityChecks;
+
+        public bool DirectoryExists(string path) => string.Equals(path, photoRoot, StringComparison.Ordinal)
+            ? Interlocked.Increment(ref rootAvailabilityChecks) == 1
+            : false;
+
+        public IEnumerable<string> EnumerateDirectories(string path) => [];
+
+        public IEnumerable<string> EnumerateFiles(string path) => [];
+
+        public FileAttributes GetAttributes(string path) => throw new InvalidOperationException("No album should be scanned in this fixture.");
     }
 }

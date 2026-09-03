@@ -56,6 +56,7 @@ public sealed class IndexingService : BackgroundService
         {
             if (!Directory.Exists(photoRoot))
             {
+                StopWatcher(ref watcherStarted);
                 if (hasPublishedSuccessfully)
                 {
                     index.MarkDegraded("Photo root is unavailable.");
@@ -87,6 +88,11 @@ public sealed class IndexingService : BackgroundService
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
+                if (exception is DirectoryNotFoundException || !Directory.Exists(photoRoot))
+                {
+                    StopWatcher(ref watcherStarted);
+                }
+
                 logger?.LogError(exception, "Background photo indexing failed.");
                 if (hasPublishedSuccessfully)
                 {
@@ -104,6 +110,17 @@ public sealed class IndexingService : BackgroundService
     }
 
     private bool IsPhotoRootAvailable() => Directory.Exists(photoRoot);
+
+    private void StopWatcher(ref bool watcherStarted)
+    {
+        if (!watcherStarted)
+        {
+            return;
+        }
+
+        watcher.Stop();
+        watcherStarted = false;
+    }
 }
 
 internal interface IIndexRefreshCoordinatorFacade

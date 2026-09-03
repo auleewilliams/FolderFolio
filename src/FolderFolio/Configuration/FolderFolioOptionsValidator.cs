@@ -8,12 +8,12 @@ public sealed class FolderFolioOptionsValidator : IValidateOptions<FolderFolioOp
     {
         var failures = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(options.PhotoRoot) || !Path.IsPathRooted(options.PhotoRoot))
+        if (string.IsNullOrWhiteSpace(options.PhotoRoot) || !Path.IsPathFullyQualified(options.PhotoRoot))
         {
             failures.Add($"{nameof(options.PhotoRoot)} must be an absolute path.");
         }
 
-        if (string.IsNullOrWhiteSpace(options.CacheRoot) || !Path.IsPathRooted(options.CacheRoot))
+        if (string.IsNullOrWhiteSpace(options.CacheRoot) || !Path.IsPathFullyQualified(options.CacheRoot))
         {
             failures.Add($"{nameof(options.CacheRoot)} must be an absolute path.");
         }

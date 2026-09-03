@@ -67,6 +67,76 @@ public sealed class MediaEndpointTests : IDisposable
         Assert.Equal([album.DirectoryName], request.AlbumDirectoryNames);
     }
 
+    [Fact]
+    public async Task A_source_removed_between_service_validation_and_generator_resolution_returns_not_found_and_queues_refresh()
+    {
+        var albumDirectory = Directory.CreateDirectory(Path.Combine(_photoRoot.Path, "01 Landscapes"));
+        var sourcePath = Path.Combine(albumDirectory.FullName, "coast.jpg");
+        ImageFixtureFactory.CreateJpeg(sourcePath);
+        var source = new FileInfo(sourcePath);
+        var photo = new IndexedPhoto(
+            "photo-id",
+            source.Name,
+            new SourceFingerprint("01 Landscapes/coast.jpg", source.Length, source.LastWriteTimeUtc.Ticks),
+            null,
+            120,
+            80);
+        var album = new IndexedAlbum(
+            "01 Landscapes",
+            "landscapes",
+            "Landscapes",
+            "landscapes",
+            1,
+            ImmutableArray.Create(photo));
+        var options = new FolderFolio.Configuration.FolderFolioOptions
+        {
+            PhotoRoot = _photoRoot.Path,
+            CacheRoot = _directory.Path
+        };
+        var keyFactory = new DerivativeKeyFactory(options);
+        var serviceGuard = new SourcePathGuard(options);
+        var generatorGuard = new RemoveSourceBeforeResolutionGuard(new SourcePathGuard(options), sourcePath);
+        var derivativeService = new DerivativeService(
+            keyFactory,
+            serviceGuard,
+            new ImageSharpDerivativeGenerator(generatorGuard),
+            options,
+            new TestHostApplicationLifetime());
+        using var app = new FolderFolioWebApplicationFactory(
+            new PortfolioSnapshot(ImmutableArray.Create(album)),
+            derivativeService,
+            _photoRoot.Path);
+        using var client = app.CreateClient();
+
+        var response = await client.GetAsync(
+            $"/media/landscapes/{photo.Id}/grid?v={keyFactory.Create(photo, DerivativeKind.Grid).Version}",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        Assert.True(app.RefreshQueue.TryRead(out var request));
+        Assert.False(request.FullScan);
+        Assert.Equal([album.DirectoryName], request.AlbumDirectoryNames);
+    }
+
+    [Fact]
+    public async Task A_non_stale_derivative_failure_remains_an_internal_server_error_without_queuing_refresh()
+    {
+        var (album, photo, derivative, factory) = CreateFixture();
+        derivative.Failure = new IOException("cache unavailable");
+        using var app = new FolderFolioWebApplicationFactory(
+            new PortfolioSnapshot(ImmutableArray.Create(album)),
+            derivative,
+            _photoRoot.Path);
+        using var client = app.CreateClient();
+
+        var response = await client.GetAsync(
+            $"/media/landscapes/{photo.Id}/grid?v={factory.Create(photo, DerivativeKind.Grid).Version}",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.False(app.RefreshQueue.TryRead(out _));
+    }
+
     public void Dispose()
     {
         _photoRoot.Dispose();
@@ -92,5 +162,20 @@ public sealed class MediaEndpointTests : IDisposable
         var photo = new IndexedPhoto("photo-id", "coast.jpg", new SourceFingerprint("01 Landscapes/coast.jpg", 3, 123), null, 120, 80);
         var album = new IndexedAlbum("01 Landscapes", "landscapes", "Landscapes", "landscapes", 1, ImmutableArray.Create(photo));
         return (album, photo, new StubDerivativeService { Derivative = new CachedDerivative(derivativePath, 3, lastModified) }, new DerivativeKeyFactory(new FolderFolio.Configuration.FolderFolioOptions()));
+    }
+
+    private sealed class RemoveSourceBeforeResolutionGuard(ISourcePathGuard inner, string sourcePath) : ISourcePathGuard
+    {
+        private int sourceRemoved;
+
+        public bool TryResolve(IndexedPhoto photo, out string resolvedPath)
+        {
+            if (Interlocked.Exchange(ref sourceRemoved, 1) == 0)
+            {
+                File.Delete(sourcePath);
+            }
+
+            return inner.TryResolve(photo, out resolvedPath);
+        }
     }
 }

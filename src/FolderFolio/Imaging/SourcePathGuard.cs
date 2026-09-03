@@ -46,6 +46,11 @@ public sealed class SourcePathGuard : ISourcePathGuard
 
         try
         {
+            if (ContainsReparsePoint(candidate))
+            {
+                return false;
+            }
+
             var info = new FileInfo(candidate);
             if (!info.Exists || (info.Attributes & FileAttributes.ReparsePoint) != 0)
             {
@@ -68,5 +73,23 @@ public sealed class SourcePathGuard : ISourcePathGuard
 
         sourcePath = candidate;
         return true;
+    }
+
+    private bool ContainsReparsePoint(string candidate)
+    {
+        var currentPath = Path.TrimEndingDirectorySeparator(_canonicalPhotoRoot);
+        var relativePath = Path.GetRelativePath(currentPath, candidate);
+        foreach (var component in relativePath.Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries))
+        {
+            currentPath = Path.Combine(currentPath, component);
+            if ((File.GetAttributes(currentPath) & FileAttributes.ReparsePoint) != 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

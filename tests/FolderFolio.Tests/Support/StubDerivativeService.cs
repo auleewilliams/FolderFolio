@@ -9,6 +9,8 @@ public sealed class StubDerivativeService : IDerivativeService
 
     public bool ThrowStaleSource { get; set; }
 
+    public Exception? Failure { get; set; }
+
     public Task<CachedDerivative> GetOrCreateAsync(
         IndexedPhoto photo,
         DerivativeKind kind,
@@ -17,6 +19,11 @@ public sealed class StubDerivativeService : IDerivativeService
         if (ThrowStaleSource)
         {
             throw new StaleSourceException();
+        }
+
+        if (Failure is not null)
+        {
+            throw Failure;
         }
 
         return Task.FromResult(Derivative);

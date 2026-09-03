@@ -109,6 +109,59 @@ public sealed class IndexingServiceTests
         await service.StopAsync(TestContext.Current.CancellationToken);
     }
 
+    [Fact]
+    public async Task A_recovered_root_starts_a_fresh_watcher_before_scanning_and_observes_later_changes()
+    {
+        using var directory = new TemporaryDirectory();
+        var photoRoot = directory.CreateDirectory("photos");
+        var options = new FolderFolioOptions { PhotoRoot = photoRoot, CacheRoot = directory.Path };
+        var queue = new IndexRefreshQueue();
+        var index = new PortfolioIndex();
+        var clock = new RetryObservingTimeProvider();
+        var scanner = new StubPhotoScanner();
+        var watcher = new LifecyclePhotoRootWatcher(queue);
+        var watcherStartsAtFullScans = new List<int>();
+        scanner.OnScanAll = () => watcherStartsAtFullScans.Add(watcher.StartCount);
+        using var service = new IndexingService(
+            options,
+            queue,
+            new IndexRefreshCoordinator(queue, scanner, index, clock),
+            index,
+            watcher,
+            clock);
+
+        await service.StartAsync(TestContext.Current.CancellationToken);
+        await WaitUntilAsync(() => index.Current.Status == IndexStatus.Ready, TestContext.Current.CancellationToken);
+
+        Directory.Delete(photoRoot, recursive: true);
+        queue.RequestFullScan();
+        await WaitUntilAsync(() => clock.QuietPeriodScheduleCount >= 1, TestContext.Current.CancellationToken);
+        clock.Advance(TimeSpan.FromMilliseconds(750));
+        await WaitUntilAsync(() => index.Current.Status == IndexStatus.Degraded, TestContext.Current.CancellationToken);
+        await clock.RetryDelayScheduled.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        Directory.CreateDirectory(photoRoot);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        await WaitUntilAsync(() => scanner.ScanAllCallCount >= 2, TestContext.Current.CancellationToken);
+        await WaitUntilAsync(() => clock.QuietPeriodScheduleCount >= 2, TestContext.Current.CancellationToken);
+        clock.Advance(TimeSpan.FromMilliseconds(750));
+        await WaitUntilAsync(() => scanner.ScanAllCallCount >= 3, TestContext.Current.CancellationToken);
+
+        var quietPeriodsBeforeChange = clock.QuietPeriodScheduleCount;
+        watcher.EmitAlbumChange("01-Trip");
+        await WaitUntilAsync(
+            () => clock.QuietPeriodScheduleCount > quietPeriodsBeforeChange,
+            TestContext.Current.CancellationToken);
+        clock.Advance(TimeSpan.FromMilliseconds(750));
+        await WaitUntilAsync(() => scanner.RescanAlbumsCallCount == 1, TestContext.Current.CancellationToken);
+
+        Assert.Equal([1, 2, 2], watcherStartsAtFullScans);
+        Assert.Equal(2, watcher.StartCount);
+        Assert.Equal(1, watcher.StopCount);
+        Assert.Equal(["01-Trip"], scanner.LastAlbumDirectoryNames);
+        await service.StopAsync(TestContext.Current.CancellationToken);
+    }
+
     private static async Task WaitUntilAsync(Func<bool> condition, CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(4);
@@ -131,16 +184,54 @@ public sealed class IndexingServiceTests
 
         public void Start() => Started = true;
 
+        public void Stop() => Started = false;
+
         public void Dispose() { }
+    }
+
+    private sealed class LifecyclePhotoRootWatcher(IIndexRefreshQueue queue) : IPhotoRootWatcher
+    {
+        private bool started;
+
+        public int StartCount { get; private set; }
+
+        public int StopCount { get; private set; }
+
+        public void Start()
+        {
+            StartCount++;
+            started = true;
+        }
+
+        public void Stop()
+        {
+            StopCount++;
+            started = false;
+        }
+
+        public void EmitAlbumChange(string albumDirectoryName)
+        {
+            if (!started)
+            {
+                throw new InvalidOperationException("The watcher is not active.");
+            }
+
+            queue.RequestAlbum(albumDirectoryName);
+        }
+
+        public void Dispose() => started = false;
     }
 
     private sealed class RetryObservingTimeProvider : TimeProvider
     {
         private readonly FakeTimeProvider clock = new();
+        private int quietPeriodScheduleCount;
 
         public TaskCompletionSource RetryDelayScheduled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource QuietPeriodScheduled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int QuietPeriodScheduleCount => Volatile.Read(ref quietPeriodScheduleCount);
 
         public override DateTimeOffset GetUtcNow() => clock.GetUtcNow();
 
@@ -156,6 +247,7 @@ public sealed class IndexingServiceTests
             }
             else if (dueTime == TimeSpan.FromMilliseconds(750))
             {
+                Interlocked.Increment(ref quietPeriodScheduleCount);
                 QuietPeriodScheduled.TrySetResult();
             }
 
