@@ -1,0 +1,7 @@
+**/bin/
+**/obj/
+[Tt]est[Rr]esult*/
+artifacts/
+.git/
+photos/
+cache/

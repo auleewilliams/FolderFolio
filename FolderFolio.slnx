@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/FolderFolio/FolderFolio.csproj" />
+  <Project Path="tests/FolderFolio.Tests/FolderFolio.Tests.csproj" />
+</Solution>

@@ -430,3 +430,8 @@ FodyWeavers.xsd
 
 # Local isolated feature worktrees
 .worktrees/
+
+# FolderFolio local content
+/photos/*
+!/photos/.gitkeep
+/cache/

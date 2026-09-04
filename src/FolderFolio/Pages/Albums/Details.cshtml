@@ -1,0 +1,51 @@
+@page "/albums/{slug}"
+@model FolderFolio.Pages.Albums.DetailsModel
+@{
+    ViewData["Title"] = Model.Gallery?.Title ?? "Portfolio";
+}
+
+<p><a asp-page="/Index">Back to albums</a></p>
+
+@if (Model.IsPreparing)
+{
+    <p class="portfolio-state" role="status">Preparing portfolio</p>
+}
+else if (Model.Gallery is { } gallery)
+{
+    <header>
+        <h1>@gallery.Title</h1>
+        <p>@gallery.PhotoCount @(gallery.PhotoCount == 1 ? "photo" : "photos")</p>
+    </header>
+
+    @if (gallery.Photos.Count == 0)
+    {
+        <p class="portfolio-state">This album has no photos yet.</p>
+    }
+    else
+    {
+        <section aria-label="@gallery.Title photos">
+            <ul class="gallery-grid">
+            @foreach (var photo in gallery.Photos)
+            {
+                <li data-photo-tile>
+                    <button type="button"
+                            data-lightbox-trigger
+                            data-web-src="@photo.WebUrl"
+                            data-alt="@photo.AccessibleName"
+                            data-index="@(photo.Position - 1)"
+                            aria-label="@photo.AccessibleName">
+                        <img src="@photo.GridUrl"
+                             alt=""
+                             width="@photo.Width"
+                             height="@photo.Height"
+                             loading="@(photo.LoadEagerly ? "eager" : "lazy")"
+                             fetchpriority="@(photo.LoadEagerly ? "high" : null)"
+                             decoding="async" />
+                        <span data-image-unavailable hidden role="status">Image unavailable</span>
+                    </button>
+                </li>
+            }
+            </ul>
+        </section>
+    }
+}

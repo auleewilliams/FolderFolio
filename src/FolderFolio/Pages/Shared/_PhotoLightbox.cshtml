@@ -1,0 +1,17 @@
+<dialog id="photo-lightbox" aria-labelledby="lightbox-title" data-state="idle">
+    <div class="lightbox-shell">
+        <div class="lightbox-toolbar">
+            <p id="lightbox-title"></p>
+            <button type="button" data-lightbox-close aria-label="Close photo">Close</button>
+        </div>
+        <div class="lightbox-stage">
+            <button type="button" data-lightbox-previous aria-label="Previous photo">Previous</button>
+            <img data-lightbox-image alt="" />
+            <button type="button" data-lightbox-next aria-label="Next photo">Next</button>
+        </div>
+        <div class="lightbox-error" data-lightbox-error hidden role="alert">
+            <p>Image unavailable</p>
+            <button type="button" data-lightbox-retry>Retry</button>
+        </div>
+    </div>
+</dialog>
