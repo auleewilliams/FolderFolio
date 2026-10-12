@@ -181,7 +181,6 @@ public sealed class IndexingServiceTests
     {
         public bool Started { get; private set; }
 
-
         public void Start() => Started = true;
 
         public void Stop() => Started = false;
@@ -241,6 +240,7 @@ public sealed class IndexingServiceTests
 
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         {
+            var timer = clock.CreateTimer(callback, state, dueTime, period);
             if (dueTime == TimeSpan.FromSeconds(5))
             {
                 RetryDelayScheduled.TrySetResult();
@@ -251,7 +251,7 @@ public sealed class IndexingServiceTests
                 QuietPeriodScheduled.TrySetResult();
             }
 
-            return clock.CreateTimer(callback, state, dueTime, period);
+            return timer;
         }
 
         public void Advance(TimeSpan timeSpan) => clock.Advance(timeSpan);
