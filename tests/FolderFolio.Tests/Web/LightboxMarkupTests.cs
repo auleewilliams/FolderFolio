@@ -34,6 +34,9 @@ public sealed class LightboxMarkupTests
         Assert.Contains("aria-label=\"Previous photo\"", html, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"Next photo\"", html, StringComparison.Ordinal);
         Assert.Contains("data-lightbox-image", html, StringComparison.Ordinal);
+        Assert.Contains("data-lightbox-avif type=\"image/avif\"", html, StringComparison.Ordinal);
+        Assert.Contains("data-avif-src=\"/media/landscapes/photo/avif?v=", html, StringComparison.Ordinal);
+        Assert.Contains("src=\"/media/landscapes/photo/grid?v=", html, StringComparison.Ordinal);
         Assert.Contains("data-state=\"idle\"", html, StringComparison.Ordinal);
         Assert.Contains("/js/lightbox.js", html, StringComparison.Ordinal);
     }

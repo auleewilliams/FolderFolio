@@ -5,6 +5,7 @@ public sealed record PhotoViewModel(
     string AccessibleName,
     string GridUrl,
     string WebUrl,
+    string AvifUrl,
     int Width,
     int Height,
     int Position,

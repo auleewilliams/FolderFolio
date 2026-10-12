@@ -11,7 +11,7 @@ public sealed class PhotoScanner : IPhotoScanner
     private const long MaxDecodedPixelBytes = 512L * 1024 * 1024;
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".jpeg", ".jpg", ".png", ".webp"
+        ".jpeg", ".jpg", ".png", ".webp", ".avif"
     };
 
     private readonly string photoRoot;

@@ -5,4 +5,5 @@ public sealed record DerivativeIdentity(
     string Version,
     string ETag,
     int MaxLongEdge,
-    int WebPQuality);
+    int Quality,
+    string Format = "webp");

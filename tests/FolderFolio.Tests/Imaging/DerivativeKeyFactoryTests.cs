@@ -22,7 +22,7 @@ public sealed class DerivativeKeyFactoryTests
         Assert.Matches("^[0-9a-f]{24}$", first.Version);
         Assert.Equal($"\"{first.CacheKey}\"", first.ETag);
         Assert.Equal(400, first.MaxLongEdge);
-        Assert.Equal(82, first.WebPQuality);
+        Assert.Equal(82, first.Quality);
     }
 
     [Fact]

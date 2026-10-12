@@ -31,6 +31,7 @@ else if (Model.Gallery is { } gallery)
                     <button type="button"
                             data-lightbox-trigger
                             data-web-src="@photo.WebUrl"
+                            data-avif-src="@photo.AvifUrl"
                             data-alt="@photo.AccessibleName"
                             data-index="@(photo.Position - 1)"
                             aria-label="@photo.AccessibleName">

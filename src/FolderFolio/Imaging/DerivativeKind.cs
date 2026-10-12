@@ -4,5 +4,6 @@ public enum DerivativeKind
 {
     Grid,
     Web,
-    Full
+    Full,
+    Avif
 }

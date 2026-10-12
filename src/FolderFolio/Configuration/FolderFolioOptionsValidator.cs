@@ -38,6 +38,11 @@ public sealed class FolderFolioOptionsValidator : IValidateOptions<FolderFolioOp
             failures.Add($"{nameof(options.WatcherDebounceMilliseconds)} must be greater than zero.");
         }
 
+        if (options.AvifQuality is < 1 or > 100)
+        {
+            failures.Add($"{nameof(options.AvifQuality)} must be between 1 and 100.");
+        }
+
         if (string.IsNullOrWhiteSpace(options.SiteTitle))
         {
             failures.Add($"{nameof(options.SiteTitle)} must not be empty.");

@@ -30,10 +30,13 @@ public sealed class DerivativeKeyFactory : IDerivativeKeyFactory
             DerivativeKind.Grid => (_options.GridLongEdge, "grid"),
             DerivativeKind.Web => (_options.WebLongEdge, "web"),
             DerivativeKind.Full => (int.MaxValue, "full"),
+            DerivativeKind.Avif => (_options.WebLongEdge, "avif"),
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
         var relativePath = photo.Source.RelativePath.Replace('\\', '/');
-        var bytes = CanonicalBytes(relativePath, photo.Source.Length, photo.Source.LastWriteUtcTicks, kindName, maxLongEdge);
+        var format = kind == DerivativeKind.Avif ? "avif" : "webp";
+        var quality = kind == DerivativeKind.Avif ? _options.AvifQuality : _options.WebPQuality;
+        var bytes = CanonicalBytes(relativePath, photo.Source.Length, photo.Source.LastWriteUtcTicks, kindName, maxLongEdge, format, quality);
         var cacheKey = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
 
         return new DerivativeIdentity(
@@ -41,10 +44,11 @@ public sealed class DerivativeKeyFactory : IDerivativeKeyFactory
             cacheKey[..VersionLength],
             $"\"{cacheKey}\"",
             maxLongEdge,
-            _options.WebPQuality);
+            quality,
+            format);
     }
 
-    private byte[] CanonicalBytes(string relativePath, long length, long lastWriteUtcTicks, string kind, int maxLongEdge)
+    private byte[] CanonicalBytes(string relativePath, long length, long lastWriteUtcTicks, string kind, int maxLongEdge, string format, int quality)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
@@ -56,8 +60,8 @@ public sealed class DerivativeKeyFactory : IDerivativeKeyFactory
             writer.WriteNumber("lastWriteUtcTicks", lastWriteUtcTicks);
             writer.WriteString("kind", kind);
             writer.WriteNumber("maxLongEdge", maxLongEdge);
-            writer.WriteNumber("webPQuality", _options.WebPQuality);
-            writer.WriteString("format", "webp");
+            writer.WriteNumber(format == "avif" ? "avifQuality" : "webPQuality", quality);
+            writer.WriteString("format", format);
             writer.WriteEndObject();
         }
 

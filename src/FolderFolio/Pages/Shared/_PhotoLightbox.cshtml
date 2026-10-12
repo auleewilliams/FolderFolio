@@ -6,7 +6,10 @@
         </div>
         <div class="lightbox-stage">
             <button type="button" data-lightbox-previous aria-label="Previous photo">Previous</button>
-            <img data-lightbox-image alt="" />
+            <picture>
+                <source data-lightbox-avif type="image/avif" />
+                <img data-lightbox-image alt="" />
+            </picture>
             <button type="button" data-lightbox-next aria-label="Next photo">Next</button>
         </div>
         <div class="lightbox-error" data-lightbox-error hidden role="alert">
