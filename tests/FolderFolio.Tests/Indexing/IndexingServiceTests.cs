@@ -61,7 +61,7 @@ public sealed class IndexingServiceTests
             TimeProvider.System);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
-        var watcherStartedBeforeScan = await initialScanStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var watcherStartedBeforeScan = await initialScanStarted.Task.WaitAsync(TimeSpan.FromSeconds(4), TestContext.Current.CancellationToken);
 
         Assert.Equal(IndexStatus.Starting, index.Current.Status);
         Assert.True(watcherStartedBeforeScan);
