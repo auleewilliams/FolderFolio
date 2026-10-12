@@ -3,5 +3,6 @@ namespace FolderFolio.Imaging;
 public enum DerivativeKind
 {
     Grid,
-    Web
+    Web,
+    Full
 }

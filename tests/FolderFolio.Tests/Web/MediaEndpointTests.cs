@@ -4,6 +4,10 @@ using FolderFolio.Imaging;
 using FolderFolio.Indexing;
 using FolderFolio.Tests.Support;
 using FolderFolio.Web;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -121,7 +125,7 @@ public sealed class MediaEndpointTests : IDisposable
     }
 
     [Fact]
-    public async Task A_non_stale_derivative_failure_remains_an_internal_server_error_without_queuing_refresh()
+    public async Task Exhausted_derivative_failures_return_an_uncached_svg_and_queue_refresh()
     {
         var (album, photo, derivative, factory) = CreateFixture();
         derivative.Failure = new IOException("cache unavailable");
@@ -135,14 +139,110 @@ public sealed class MediaEndpointTests : IDisposable
             $"/media/landscapes/{photo.Id}/grid?v={factory.Create(photo, DerivativeKind.Grid).Version}",
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(System.Net.HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("image/svg+xml", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Null(response.Headers.ETag);
+        var svg = System.Xml.Linq.XDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("svg", svg.Root?.Name.LocalName);
+        Assert.Contains("Image unavailable", svg.ToString());
+        await AssertDoesNotDisclosePhotoRoot(response);
+        Assert.Equal([DerivativeKind.Grid, DerivativeKind.Web, DerivativeKind.Full], derivative.RequestedKinds);
+        Assert.True(app.RefreshQueue.TryRead(out var request));
+        Assert.Equal([album.DirectoryName], request.AlbumDirectoryNames);
         Assert.False(app.RefreshQueue.TryRead(out _));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_failed_grid_derivative_falls_back_to_web_then_full_without_immutable_caching(bool webFails)
+    {
+        var (album, photo, derivative, factory) = CreateFixture();
+        derivative.Failures[DerivativeKind.Grid] = new IOException("grid failed");
+        if (webFails) derivative.Failures[DerivativeKind.Web] = new IOException("web failed");
+        using var app = new FolderFolioWebApplicationFactory(new PortfolioSnapshot(ImmutableArray.Create(album)), derivative, _photoRoot.Path);
+        using var client = app.CreateClient();
+
+        var response = await client.GetAsync($"/media/landscapes/{photo.Id}/grid?v={factory.Create(photo, DerivativeKind.Grid).Version}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("image/webp", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Null(response.Headers.ETag);
+        Assert.Equal(webFails ? [DerivativeKind.Grid, DerivativeKind.Web, DerivativeKind.Full] : new[] { DerivativeKind.Grid, DerivativeKind.Web }, derivative.RequestedKinds);
+        Assert.True(app.RefreshQueue.TryRead(out _));
     }
 
     public void Dispose()
     {
         _photoRoot.Dispose();
         _directory.Dispose();
+    }
+
+    [Fact]
+    public async Task A_failed_web_derivative_falls_back_directly_to_full()
+    {
+        var (album, photo, derivative, factory) = CreateFixture();
+        derivative.Failures[DerivativeKind.Web] = new IOException("web failed");
+        using var app = new FolderFolioWebApplicationFactory(new PortfolioSnapshot(ImmutableArray.Create(album)), derivative, _photoRoot.Path);
+        using var client = app.CreateClient();
+
+        var response = await client.GetAsync($"/media/landscapes/{photo.Id}/web?v={factory.Create(photo, DerivativeKind.Web).Version}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal([DerivativeKind.Web, DerivativeKind.Full], derivative.RequestedKinds);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+    }
+
+    [Fact]
+    public async Task Failures_log_each_exception_type_and_source_path()
+    {
+        var (album, photo, derivative, factory) = CreateFixture();
+        derivative.Failure = new IOException("cache unavailable");
+        using var logs = new FailureLogProvider();
+        using var app = new FolderFolioWebApplicationFactory(new PortfolioSnapshot(ImmutableArray.Create(album)), derivative, _photoRoot.Path);
+        using var configured = app.WithWebHostBuilder(builder => builder.ConfigureLogging(logging => logging.AddProvider(logs)));
+        using var client = configured.CreateClient();
+
+        await client.GetAsync($"/media/landscapes/{photo.Id}/grid?v={factory.Create(photo, DerivativeKind.Grid).Version}", TestContext.Current.CancellationToken);
+
+        Assert.Equal(3, logs.Entries.Count);
+        Assert.All(logs.Entries, entry =>
+        {
+            Assert.IsType<IOException>(entry.Exception);
+            Assert.Equal(typeof(IOException).FullName, entry.Properties["ExceptionType"]);
+            Assert.Equal(photo.Source.RelativePath, entry.Properties["SourcePath"]);
+        });
+    }
+
+    [Fact]
+    public async Task Cancellation_is_propagated_without_fallback_or_refresh()
+    {
+        var (album, photo, derivative, factory) = CreateFixture();
+        derivative.Failure = new OperationCanceledException();
+        var index = new PortfolioIndex();
+        index.PublishReady(new PortfolioSnapshot(ImmutableArray.Create(album)), DateTimeOffset.UnixEpoch, TimeSpan.Zero);
+        var queue = new IndexRefreshQueue();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => MediaEndpoint.HandleAsync(
+            "landscapes", photo.Id, "grid", factory.Create(photo, DerivativeKind.Grid).Version,
+            new DefaultHttpContext(), index, factory, derivative, queue, NullLoggerFactory.Instance,
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal([DerivativeKind.Grid], derivative.RequestedKinds);
+        Assert.False(queue.TryRead(out _));
+    }
+
+    private sealed class FailureLogProvider : ILoggerProvider, ILogger
+    {
+        public List<(Exception? Exception, Dictionary<string, object?> Properties)> Entries { get; } = [];
+        public ILogger CreateLogger(string categoryName) => categoryName == "FolderFolio.Web.MediaEndpoint" ? this : NullLogger.Instance;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((exception, ((IEnumerable<KeyValuePair<string, object?>>)state!).ToDictionary()));
+        public void Dispose() { }
     }
 
     private async Task AssertDoesNotDisclosePhotoRoot(HttpResponseMessage response)

@@ -53,6 +53,8 @@ Compose mounts `./photos` at `/photos` read-only and keeps generated WebP deriva
 
 Derivative URLs are versioned from their source and image-output settings. Replacing a source at the same filename therefore produces a new URL after the watcher quiet period. Old versioned derivatives are intentionally retained. To reclaim space, stop the service, clear the cache, and start it again; missing derivatives regenerate on demand.
 
+If image generation fails, media requests try progressively larger WebP derivatives (grid, web, then full source dimensions), and finally return an "Image unavailable" SVG. Failures log the source-relative path and exception type and queue the album for refresh. Fallback responses are not cached, so later requests can recover. Sources that changed since indexing still return `404` and queue a refresh.
+
 ## Local development
 
 Install the .NET SDK selected by `global.json`, make suitable local photo and cache directories, then supply absolute paths when running the app:

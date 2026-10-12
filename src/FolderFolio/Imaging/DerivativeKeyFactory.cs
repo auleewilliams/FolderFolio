@@ -29,6 +29,7 @@ public sealed class DerivativeKeyFactory : IDerivativeKeyFactory
         {
             DerivativeKind.Grid => (_options.GridLongEdge, "grid"),
             DerivativeKind.Web => (_options.WebLongEdge, "web"),
+            DerivativeKind.Full => (int.MaxValue, "full"),
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
         var relativePath = photo.Source.RelativePath.Replace('\\', '/');

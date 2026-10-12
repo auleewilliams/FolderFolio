@@ -40,6 +40,28 @@ public sealed class ImageSharpDerivativeGeneratorTests
     }
 
     [Fact]
+    public async Task A_full_derivative_retains_oriented_source_dimensions_without_private_metadata()
+    {
+        using var directory = new TemporaryDirectory();
+        var root = directory.CreateDirectory("photos");
+        var sourcePath = Path.Combine(root, "full.jpg");
+        ImageFixtureFactory.CreateJpeg(sourcePath, width: 40, height: 80, orientation: 6, includePrivateMetadata: true);
+        var photo = Photo(root, sourcePath);
+        var identity = new DerivativeKeyFactory(new FolderFolioOptions()).Create(photo, DerivativeKind.Full);
+        await using var destination = new MemoryStream();
+
+        await Generator(root).WriteWebPAsync(photo, destination, identity.MaxLongEdge, identity.WebPQuality, TestContext.Current.CancellationToken);
+
+        destination.Position = 0;
+        using var derivative = await Image.LoadAsync(destination, TestContext.Current.CancellationToken);
+        Assert.Equal(80, derivative.Width);
+        Assert.Equal(40, derivative.Height);
+        Assert.Null(derivative.Metadata.ExifProfile);
+        Assert.Null(derivative.Metadata.IptcProfile);
+        Assert.Null(derivative.Metadata.XmpProfile);
+    }
+
+    [Fact]
     public async Task WriteWebPAsync_does_not_enlarge_smaller_sources()
     {
         using var directory = new TemporaryDirectory();
