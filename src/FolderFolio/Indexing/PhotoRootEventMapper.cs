@@ -6,7 +6,7 @@ public sealed class PhotoRootEventMapper
 {
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".jpg", ".jpeg", ".png", ".webp"
+        ".jpg", ".jpeg", ".png", ".webp", ".avif"
     };
 
     private readonly string photoRoot;

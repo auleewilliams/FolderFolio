@@ -17,6 +17,7 @@ public sealed class MediaUrlBuilder(LinkGenerator links, IDerivativeKeyFactory k
             DerivativeKind.Grid => "grid",
             DerivativeKind.Web => "web",
             DerivativeKind.Full => "full",
+            DerivativeKind.Avif => "avif",
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
         var path = links.GetPathByName(

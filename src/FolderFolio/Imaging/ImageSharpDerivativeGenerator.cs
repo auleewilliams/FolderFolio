@@ -15,11 +15,18 @@ public sealed class ImageSharpDerivativeGenerator : IImageDerivativeGenerator
         _sourcePathGuard = sourcePathGuard ?? throw new ArgumentNullException(nameof(sourcePathGuard));
     }
 
-    public async Task WriteWebPAsync(
+    public Task WriteWebPAsync(IndexedPhoto photo, Stream destination, int maxLongEdge, int quality, CancellationToken cancellationToken) =>
+        WriteAsync(photo, destination, maxLongEdge, quality, false, cancellationToken);
+
+    public Task WriteAvifAsync(IndexedPhoto photo, Stream destination, int maxLongEdge, int quality, CancellationToken cancellationToken) =>
+        WriteAsync(photo, destination, maxLongEdge, quality, true, cancellationToken);
+
+    private async Task WriteAsync(
         IndexedPhoto photo,
         Stream destination,
         int maxLongEdge,
         int quality,
+        bool avif,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(photo);
@@ -31,6 +38,22 @@ public sealed class ImageSharpDerivativeGenerator : IImageDerivativeGenerator
         if (!_sourcePathGuard.TryResolve(photo, out var sourcePath))
         {
             throw new StaleSourceException();
+        }
+
+        if (AvifCodec.IsAvif(sourcePath))
+        {
+            Image decoded;
+            try
+            {
+                decoded = await AvifCodec.LoadAsync(sourcePath, maxLongEdge, cancellationToken);
+            }
+            catch (Exception exception) when (IsExpectedSourceReadFailure(exception))
+            {
+                ThrowIfSourceBecameStale(photo);
+                throw;
+            }
+            using (decoded) await EncodeAsync(decoded, destination, quality, avif, cancellationToken);
+            return;
         }
 
         var identificationOptions = new DecoderOptions
@@ -88,6 +111,18 @@ public sealed class ImageSharpDerivativeGenerator : IImageDerivativeGenerator
             image.Metadata.IptcProfile = null;
             image.Metadata.XmpProfile = null;
 
+            await EncodeAsync(image, destination, quality, avif, cancellationToken);
+        }
+    }
+
+    private static async Task EncodeAsync(Image image, Stream destination, int quality, bool avif, CancellationToken cancellationToken)
+    {
+        if (avif)
+        {
+            await AvifCodec.WriteAsync(image, destination, quality, cancellationToken);
+        }
+        else
+        {
             var encoder = new WebpEncoder
             {
                 FileFormat = WebpFileFormatType.Lossy,

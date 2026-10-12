@@ -33,6 +33,8 @@ public sealed class PhotoRootEventMapperTests
     [InlineData("photo.JpEg")]
     [InlineData("photo.PnG")]
     [InlineData("photo.wEbP")]
+    [InlineData("photo.avif")]
+    [InlineData("photo.AvIf")]
     public void Maps_supported_direct_photo_extensions_case_insensitively(string fileName)
     {
         var request = mapper.MapPath($"/photos/01-Landscapes/{fileName}");
@@ -65,5 +67,15 @@ public sealed class PhotoRootEventMapperTests
         Assert.NotNull(request);
         Assert.False(request.FullScan);
         Assert.Equal(["01-Landscapes", "02-Portraits"], request.AlbumDirectoryNames.Order());
+    }
+
+    [Fact]
+    public void Maps_AVIF_cross_album_renames_and_supported_extension_changes()
+    {
+        var request = mapper.MapRename("/photos/01-Landscapes/a.avif", "/photos/02-Portraits/a.AVIF");
+        Assert.NotNull(request);
+        Assert.Equal(["01-Landscapes", "02-Portraits"], request.AlbumDirectoryNames.Order());
+        Assert.NotNull(mapper.MapRename("/photos/01-Landscapes/a.txt", "/photos/01-Landscapes/a.avif"));
+        Assert.NotNull(mapper.MapRename("/photos/01-Landscapes/a.avif", "/photos/01-Landscapes/a.txt"));
     }
 }

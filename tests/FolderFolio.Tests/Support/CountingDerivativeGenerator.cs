@@ -17,6 +17,9 @@ public sealed class CountingDerivativeGenerator : IImageDerivativeGenerator
 
     public void Release() => _release.TrySetResult();
 
+    public Task WriteAvifAsync(IndexedPhoto photo, Stream destination, int maxLongEdge, int quality, CancellationToken cancellationToken) =>
+        WriteWebPAsync(photo, destination, maxLongEdge, quality, cancellationToken);
+
     public async Task WriteWebPAsync(
         IndexedPhoto photo,
         Stream destination,

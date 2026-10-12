@@ -43,7 +43,7 @@ public sealed class DerivativeService : IDerivativeService
 
         EnsureSourceIsCurrent(photo);
         var identity = _keyFactory.Create(photo, kind);
-        var finalPath = Path.Combine(_cacheRoot, identity.CacheKey[..2], $"{identity.CacheKey}.webp");
+        var finalPath = Path.Combine(_cacheRoot, identity.CacheKey[..2], $"{identity.CacheKey}.{identity.Format}");
         if (TryGetCached(finalPath, out var cached))
         {
             return cached;
@@ -84,11 +84,13 @@ public sealed class DerivativeService : IDerivativeService
                 bufferSize: 81920,
                 FileOptions.Asynchronous | FileOptions.WriteThrough))
             {
-                await _generator.WriteWebPAsync(
+                Func<IndexedPhoto, Stream, int, int, CancellationToken, Task> generate =
+                    identity.Format == "avif" ? _generator.WriteAvifAsync : _generator.WriteWebPAsync;
+                await generate(
                     photo,
                     destination,
                     identity.MaxLongEdge,
-                    identity.WebPQuality,
+                    identity.Quality,
                     _applicationStopping);
                 await destination.FlushAsync(_applicationStopping);
             }

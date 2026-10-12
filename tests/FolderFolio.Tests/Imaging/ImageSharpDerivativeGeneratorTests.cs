@@ -50,7 +50,7 @@ public sealed class ImageSharpDerivativeGeneratorTests
         var identity = new DerivativeKeyFactory(new FolderFolioOptions()).Create(photo, DerivativeKind.Full);
         await using var destination = new MemoryStream();
 
-        await Generator(root).WriteWebPAsync(photo, destination, identity.MaxLongEdge, identity.WebPQuality, TestContext.Current.CancellationToken);
+        await Generator(root).WriteWebPAsync(photo, destination, identity.MaxLongEdge, identity.Quality, TestContext.Current.CancellationToken);
 
         destination.Position = 0;
         using var derivative = await Image.LoadAsync(destination, TestContext.Current.CancellationToken);

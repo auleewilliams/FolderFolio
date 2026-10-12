@@ -76,7 +76,7 @@ public static class MediaEndpoint
             if (candidate != kind)
             {
                 context.Response.Headers.CacheControl = "no-store";
-                return TypedResults.PhysicalFile(derivative.AbsolutePath, "image/webp");
+                return TypedResults.PhysicalFile(derivative.AbsolutePath, candidate == DerivativeKind.Avif ? "image/avif" : "image/webp");
             }
 
             var headers = context.Response.GetTypedHeaders();
@@ -91,7 +91,7 @@ public static class MediaEndpoint
 
             return TypedResults.PhysicalFile(
                 derivative.AbsolutePath,
-                "image/webp",
+                kind == DerivativeKind.Avif ? "image/avif" : "image/webp",
                 lastModified: derivative.LastModifiedUtc,
                 entityTag: new EntityTagHeaderValue(identity.ETag));
         }
@@ -110,6 +110,7 @@ public static class MediaEndpoint
     {
         DerivativeKind.Grid => [DerivativeKind.Grid, DerivativeKind.Web, DerivativeKind.Full],
         DerivativeKind.Web => [DerivativeKind.Web, DerivativeKind.Full],
+        DerivativeKind.Avif => [DerivativeKind.Avif, DerivativeKind.Web, DerivativeKind.Full],
         _ => [kind]
     };
 
@@ -125,6 +126,9 @@ public static class MediaEndpoint
                 return true;
             case "full":
                 kind = DerivativeKind.Full;
+                return true;
+            case "avif":
+                kind = DerivativeKind.Avif;
                 return true;
             default:
                 kind = default;

@@ -7,6 +7,7 @@
         (root.documentElement || root).dataset.lightboxInitialized = 'true';
         const triggers = Array.from(root.querySelectorAll('[data-lightbox-trigger]'));
         const image = dialog.querySelector('[data-lightbox-image]');
+        const avif = dialog.querySelector('[data-lightbox-avif]');
         const caption = dialog.querySelector('#lightbox-title');
         const close = dialog.querySelector('[data-lightbox-close]');
         const previous = dialog.querySelector('[data-lightbox-previous]');
@@ -18,6 +19,10 @@
 
         function setState(state) { dialog.dataset.state = state; error.hidden = state !== 'error'; }
         function updateControls() { previous.disabled = activeIndex <= 0; next.disabled = activeIndex >= triggers.length - 1; }
+        function clearImage() {
+            image.removeAttribute('src');
+            avif.removeAttribute('srcset');
+        }
         function load(trigger) {
             activeTrigger = trigger;
             activeIndex = triggers.indexOf(trigger);
@@ -25,7 +30,8 @@
             image.alt = trigger.dataset.alt;
             updateControls();
             setState('loading');
-            image.removeAttribute('src');
+            clearImage();
+            avif.srcset = trigger.dataset.avifSrc;
             image.src = trigger.dataset.webSrc;
         }
         function open(trigger) { load(trigger); dialog.showModal(); close.focus(); }
@@ -49,11 +55,14 @@
         retry.addEventListener('click', function () {
             const url = new URL(activeTrigger.dataset.webSrc, window.location.origin);
             url.searchParams.set('retry', Date.now().toString());
-            image.removeAttribute('src');
+            const avifUrl = new URL(activeTrigger.dataset.avifSrc, window.location.origin);
+            avifUrl.searchParams.set('retry', Date.now().toString());
+            clearImage();
             setState('loading');
+            avif.srcset = avifUrl.pathname + avifUrl.search;
             image.src = url.pathname + url.search;
         });
-        dialog.addEventListener('close', function () { image.removeAttribute('src'); setState('idle'); if (activeTrigger) activeTrigger.focus(); });
+        dialog.addEventListener('close', function () { clearImage(); setState('idle'); if (activeTrigger) activeTrigger.focus(); });
         dialog.addEventListener('click', function (event) { if (event.target === dialog) closeDialog(); });
         dialog.addEventListener('keydown', function (event) {
             if (event.key === 'ArrowLeft') { event.preventDefault(); navigate(-1); }

@@ -2,6 +2,7 @@ using System.Globalization;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Metadata.Profiles.Exif;
+using FolderFolio.Imaging;
 
 namespace FolderFolio.Indexing;
 
@@ -14,6 +15,8 @@ public sealed class ImageSharpMetadataReader : IImageMetadataReader
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+
+        if (AvifCodec.IsAvif(sourcePath)) return await AvifCodec.IdentifyAsync(sourcePath, cancellationToken);
 
         var options = new DecoderOptions
         {

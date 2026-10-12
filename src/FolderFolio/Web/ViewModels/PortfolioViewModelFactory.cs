@@ -45,6 +45,7 @@ public sealed class PortfolioViewModelFactory(IMediaUrlBuilder mediaUrls)
         $"Photo {position} of {photoCount} in {album.Title}",
         mediaUrls.Build(album, photo, DerivativeKind.Grid),
         mediaUrls.Build(album, photo, DerivativeKind.Web),
+        mediaUrls.Build(album, photo, DerivativeKind.Avif),
         photo.Width,
         photo.Height,
         position,
