@@ -97,8 +97,6 @@ public sealed class IndexingServiceTests
 
         Directory.Delete(directory.Path, recursive: true);
         queue.RequestFullScan();
-        await clock.QuietPeriodScheduled.Task.WaitAsync(TestContext.Current.CancellationToken);
-        clock.Advance(TimeSpan.FromMilliseconds(750));
         await WaitUntilAsync(() => index.Current.Status == IndexStatus.Degraded, TestContext.Current.CancellationToken);
         var degradedGeneration = index.Current.Generation;
         await clock.RetryDelayScheduled.Task.WaitAsync(TestContext.Current.CancellationToken);
@@ -136,16 +134,11 @@ public sealed class IndexingServiceTests
 
         Directory.Delete(photoRoot, recursive: true);
         queue.RequestFullScan();
-        await WaitUntilAsync(() => clock.QuietPeriodScheduleCount >= 1, TestContext.Current.CancellationToken);
-        clock.Advance(TimeSpan.FromMilliseconds(750));
         await WaitUntilAsync(() => index.Current.Status == IndexStatus.Degraded, TestContext.Current.CancellationToken);
         await clock.RetryDelayScheduled.Task.WaitAsync(TestContext.Current.CancellationToken);
 
         Directory.CreateDirectory(photoRoot);
         clock.Advance(TimeSpan.FromSeconds(5));
-        await WaitUntilAsync(() => scanner.ScanAllCallCount >= 2, TestContext.Current.CancellationToken);
-        await WaitUntilAsync(() => clock.QuietPeriodScheduleCount >= 2, TestContext.Current.CancellationToken);
-        clock.Advance(TimeSpan.FromMilliseconds(750));
         await WaitUntilAsync(() => scanner.ScanAllCallCount >= 3, TestContext.Current.CancellationToken);
 
         var quietPeriodsBeforeChange = clock.QuietPeriodScheduleCount;
@@ -228,8 +221,6 @@ public sealed class IndexingServiceTests
 
         public TaskCompletionSource RetryDelayScheduled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public TaskCompletionSource QuietPeriodScheduled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
         public int QuietPeriodScheduleCount => Volatile.Read(ref quietPeriodScheduleCount);
 
         public override DateTimeOffset GetUtcNow() => clock.GetUtcNow();
@@ -248,7 +239,6 @@ public sealed class IndexingServiceTests
             else if (dueTime == TimeSpan.FromMilliseconds(750))
             {
                 Interlocked.Increment(ref quietPeriodScheduleCount);
-                QuietPeriodScheduled.TrySetResult();
             }
 
             return timer;

@@ -45,6 +45,7 @@ Settings live in the `FolderFolio` configuration section and can be overridden w
 | `FolderFolio__GridLongEdge` | `400` | Positive maximum long edge for gallery derivatives. |
 | `FolderFolio__WebLongEdge` | `2000` | Positive maximum long edge for lightbox derivatives; at least the grid edge. |
 | `FolderFolio__WebPQuality` | `82` | WebP quality, from 1 through 100. |
+| `FolderFolio__WatcherDebounceMilliseconds` | `2000` | Positive watcher quiet period before coalesced album changes are queued. Full scans bypass it. |
 | `FolderFolio__SiteTitle` | `FolderFolio` | Required nonblank home-page title. |
 | `FolderFolio__Tagline` | `Photos from a folder.` | Optional home-page tagline. |
 
