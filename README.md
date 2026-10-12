@@ -20,6 +20,8 @@ docker compose logs --no-color folderfolio
 
 `GET /health` returns JSON with the index status, generation, album total, photo total, and last successful scan time. It returns `200` only when the index is `ready`; it returns `503` during initial indexing and when the index is degraded. Visitors may still receive the last valid portfolio while health is degraded.
 
+`GET /robots.txt` asks all search engine crawlers to avoid the entire site. After deployment, use the site's Google Search Console property to verify that Google has fetched the file.
+
 ## Photo folders
 
 Each immediate directory under `PhotoRoot` is one album. FolderFolio considers only files immediately inside each album directory; nested directories are not albums and their images are ignored. Supported extensions are `.jpg`, `.jpeg`, `.png`, and `.webp`, case-insensitively. Symbolic links and other reparse points, corrupt images, and unreadable files are skipped.
