@@ -4,6 +4,9 @@ namespace FolderFolio.Web;
 
 public static class HealthEndpoint
 {
+    public const string RouteName = "folderfolio-health";
+    public const string InternalRouteName = "folderfolio-health-internal";
+
     public static IResult Handle(HttpContext context, IPortfolioIndex index)
     {
         var publication = index.Current;
