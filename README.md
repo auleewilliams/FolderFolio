@@ -20,6 +20,8 @@ docker compose logs --no-color folderfolio
 
 `GET /health` returns JSON with the index status, generation, album total, photo total, and last successful scan time. It returns `200` only when the index is `ready`; it returns `503` during initial indexing and when the index is degraded. Visitors may still receive the last valid portfolio while health is degraded.
 
+Media requests use an in-memory sliding window of 60 requests per minute per client IP; `/health` allows 10 per minute. Exceeding either limit returns `429` with `Retry-After`. `/health/internal` is the named route for internal health checks and bypasses these limits.
+
 `GET /robots.txt` asks all search engine crawlers to avoid the entire site. After deployment, use the site's Google Search Console property to verify that Google has fetched the file.
 
 ## Photo folders
