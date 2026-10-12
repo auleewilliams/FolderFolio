@@ -50,7 +50,8 @@ public sealed class IndexingServiceTests
         var index = new PortfolioIndex();
         var scanner = new StubPhotoScanner { Exception = new IOException("cannot scan") };
         var watcher = new RecordingPhotoRootWatcher();
-        scanner.OnScanAll = () => watcher.WasStartedWhenInitialScanRan = watcher.Started;
+        var initialScanStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        scanner.OnScanAll = () => initialScanStarted.TrySetResult(watcher.Started);
         using var service = new IndexingService(
             options,
             queue,
@@ -60,10 +61,10 @@ public sealed class IndexingServiceTests
             TimeProvider.System);
 
         await service.StartAsync(TestContext.Current.CancellationToken);
-        await WaitUntilAsync(() => scanner.ScanAllCallCount == 1, TestContext.Current.CancellationToken);
+        var watcherStartedBeforeScan = await initialScanStarted.Task.WaitAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(IndexStatus.Starting, index.Current.Status);
-        Assert.True(watcher.WasStartedWhenInitialScanRan);
+        Assert.True(watcherStartedBeforeScan);
         await service.StopAsync(TestContext.Current.CancellationToken);
     }
 
@@ -180,7 +181,6 @@ public sealed class IndexingServiceTests
     {
         public bool Started { get; private set; }
 
-        public bool WasStartedWhenInitialScanRan { get; set; }
 
         public void Start() => Started = true;
 
