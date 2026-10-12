@@ -37,6 +37,7 @@ builder.Services.AddRazorPages();
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseMiddleware<MediaLatencyMiddleware>();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
