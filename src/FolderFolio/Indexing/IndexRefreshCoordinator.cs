@@ -39,11 +39,11 @@ public sealed class IndexRefreshCoordinator
         }
 
         var request = DrainRequests();
-        while (true)
+        while (!request.FullScan)
         {
             using var quietPeriodCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var nextRequest = queue.WaitToReadAsync(quietPeriodCancellation.Token).AsTask();
-            var quietPeriod = Task.Delay(QuietPeriod, timeProvider, cancellationToken);
+            var quietPeriod = Task.Delay(QuietPeriod, timeProvider, quietPeriodCancellation.Token);
             if (await Task.WhenAny(nextRequest, quietPeriod).ConfigureAwait(false) == quietPeriod)
             {
                 await quietPeriod.ConfigureAwait(false);
@@ -64,6 +64,7 @@ public sealed class IndexRefreshCoordinator
                 break;
             }
 
+            quietPeriodCancellation.Cancel();
             request = Combine(request, DrainRequests());
         }
 

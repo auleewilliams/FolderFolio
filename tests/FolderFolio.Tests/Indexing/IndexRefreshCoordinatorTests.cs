@@ -42,8 +42,23 @@ public sealed class IndexRefreshCoordinatorTests
         queue.RequestFullScan();
 
         var scan = coordinator.ProcessNextBatchAsync(TestContext.Current.CancellationToken);
-        timeProvider.Advance(TimeSpan.FromMilliseconds(750));
-        await scan;
+        await scan.WaitAsync(TimeSpan.FromSeconds(4), TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, scanner.ScanAllCallCount);
+        Assert.Equal(0, scanner.RescanAlbumsCallCount);
+    }
+
+    [Fact]
+    public async Task A_full_scan_arriving_during_an_album_quiet_period_is_not_delayed()
+    {
+        var queue = new IndexRefreshQueue();
+        var scanner = new StubPhotoScanner();
+        var coordinator = new IndexRefreshCoordinator(queue, scanner, new PortfolioIndex(), new FakeTimeProvider());
+        queue.RequestAlbum("01-Trip");
+        var scan = coordinator.ProcessNextBatchAsync(TestContext.Current.CancellationToken);
+
+        queue.RequestFullScan();
+        await scan.WaitAsync(TimeSpan.FromSeconds(4), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, scanner.ScanAllCallCount);
         Assert.Equal(0, scanner.RescanAlbumsCallCount);
