@@ -24,6 +24,8 @@ Media requests use an in-memory sliding window of 60 requests per minute per cli
 
 `GET /robots.txt` asks all search engine crawlers to avoid the entire site. After deployment, use the site's Google Search Console property to verify that Google has fetched the file.
 
+`GET /sitemap.xml` publishes the current home, album and versioned WebP media URLs as XML. Every request uses the latest index publication. URLs use the forwarded scheme, request host and application path, or the optional canonical `SiteUrl`. The sitemap remains available while `robots.txt` asks crawlers to avoid the site.
+
 ## Photo folders
 
 Each immediate directory under `PhotoRoot` is one album. FolderFolio considers only files immediately inside each album directory; nested directories are not albums and their images are ignored. Supported extensions are `.jpg`, `.jpeg`, `.png`, and `.webp`, case-insensitively. Symbolic links and other reparse points, corrupt images, and unreadable files are skipped.
@@ -47,6 +49,7 @@ Settings live in the `FolderFolio` configuration section and can be overridden w
 | `FolderFolio__WebPQuality` | `82` | WebP quality, from 1 through 100. |
 | `FolderFolio__WatcherDebounceMilliseconds` | `2000` | Positive watcher quiet period before coalesced album changes are queued. Full scans bypass it. |
 | `FolderFolio__SiteTitle` | `FolderFolio` | Required nonblank home-page title. |
+| `FolderFolio__SiteUrl` | unset | Optional absolute HTTP(S) base URL for the sitemap, including an application path if needed. `SiteTitle` remains the display title. |
 | `FolderFolio__Tagline` | `Photos from a folder.` | Optional home-page tagline. |
 
 Compose mounts `./photos` at `/photos` read-only and keeps generated WebP derivatives in the persistent named volume `folderfolio-cache` at `/cache`. The image runs as the non-root `app` user (UID 1654). If replacing the named volume with a Linux bind mount for the cache, make that directory writable by UID 1654; do not resolve permissions by running the service as root.

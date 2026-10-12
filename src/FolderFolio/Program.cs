@@ -54,6 +54,7 @@ app.MapGet("/health/internal", HealthEndpoint.Handle)
     .DisableRateLimiting();
 MediaEndpoint.Map(app);
 RobotsEndpoint.Map(app);
+SitemapEndpoint.Map(app);
 app.MapRazorPages();
 
 app.Run();

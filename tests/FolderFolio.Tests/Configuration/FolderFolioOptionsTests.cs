@@ -60,6 +60,16 @@ public sealed class FolderFolioOptionsTests
     }
 
     [Fact]
+    public void Validator_rejects_non_http_or_non_base_site_urls()
+    {
+        foreach (var url in new[] { "relative", "ftp://example.com", "https://example.com/?q=value", "https://example.com/#part", "https://user:secret@example.com" })
+        {
+            var result = new FolderFolioOptionsValidator().Validate(null, new FolderFolioOptions { SiteUrl = url });
+            Assert.Contains(result.Failures!, failure => failure.Contains(nameof(FolderFolioOptions.SiteUrl)));
+        }
+    }
+
+    [Fact]
     public void Validator_accepts_a_valid_configuration()
     {
         var fullyQualifiedRoot = Path.GetFullPath(Path.GetTempPath());

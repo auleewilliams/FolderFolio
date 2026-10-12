@@ -43,6 +43,14 @@ public sealed class FolderFolioOptionsValidator : IValidateOptions<FolderFolioOp
             failures.Add($"{nameof(options.SiteTitle)} must not be empty.");
         }
 
+        if (!string.IsNullOrWhiteSpace(options.SiteUrl) &&
+            (!Uri.TryCreate(options.SiteUrl, UriKind.Absolute, out var siteUrl) ||
+             siteUrl.Scheme is not ("http" or "https") ||
+             siteUrl.Query.Length != 0 || siteUrl.Fragment.Length != 0 || siteUrl.UserInfo.Length != 0))
+        {
+            failures.Add($"{nameof(options.SiteUrl)} must be an absolute HTTP(S) URL without a query, fragment or credentials.");
+        }
+
         return failures.Count == 0
             ? ValidateOptionsResult.Success
             : ValidateOptionsResult.Fail(failures);
