@@ -7,6 +7,7 @@ namespace FolderFolio.Web;
 public static class MediaEndpoint
 {
     public const string RouteName = "folderfolio-media";
+    public static readonly TimeSpan ImmutableCacheDuration = TimeSpan.FromDays(365);
 
     public static void Map(WebApplication app) => app.MapGet(
         "/media/{albumSlug}/{photoId}/{size}",
@@ -51,7 +52,7 @@ public static class MediaEndpoint
             headers.CacheControl = new CacheControlHeaderValue
             {
                 Public = true,
-                MaxAge = TimeSpan.FromDays(365),
+                MaxAge = ImmutableCacheDuration,
                 Extensions = { new NameValueHeaderValue("immutable") }
             };
             headers.ETag = new EntityTagHeaderValue(identity.ETag);

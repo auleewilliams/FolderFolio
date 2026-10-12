@@ -3,6 +3,7 @@ using FolderFolio.Domain;
 using FolderFolio.Imaging;
 using FolderFolio.Indexing;
 using FolderFolio.Tests.Support;
+using FolderFolio.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -28,6 +29,7 @@ public sealed class MediaEndpointTests : IDisposable
         Assert.Equal("image/webp", response.Content.Headers.ContentType?.MediaType);
         Assert.Equal(factory.Create(photo, DerivativeKind.Grid).ETag, response.Headers.ETag?.Tag);
         Assert.Equal("public,max-age=31536000,immutable", response.Headers.CacheControl?.ToString().Replace(" ", string.Empty));
+        Assert.Equal(MediaEndpoint.ImmutableCacheDuration, response.Headers.CacheControl?.MaxAge);
         await AssertDoesNotDisclosePhotoRoot(response);
     }
 
