@@ -77,6 +77,26 @@ public sealed class HealthEndpointTests
         Assert.DoesNotContain("stack", responseText, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Public_health_is_rate_limited_but_the_named_internal_route_bypasses_it()
+    {
+        using var app = new HealthWebApplicationFactory(new PortfolioIndex());
+        using var client = app.CreateClient();
+
+        for (var request = 0; request < 10; request++)
+        {
+            var response = await client.GetAsync("/health", TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        }
+
+        var rejected = await client.GetAsync("/health", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+        Assert.Equal("60", rejected.Headers.RetryAfter?.Delta?.TotalSeconds.ToString("0"));
+
+        var internalResponse = await client.GetAsync("/health/internal", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, internalResponse.StatusCode);
+    }
+
     private static PortfolioSnapshot Snapshot()
     {
         var photos = ImmutableArray.Create(

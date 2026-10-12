@@ -11,7 +11,8 @@ public static class MediaEndpoint
     public static void Map(WebApplication app) => app.MapGet(
         "/media/{albumSlug}/{photoId}/{size}",
         HandleAsync)
-        .WithName(RouteName);
+        .WithName(RouteName)
+        .RequireRateLimiting(RateLimitingSetup.MediaPolicyName);
 
     public static async Task<IResult> HandleAsync(
         string albumSlug,

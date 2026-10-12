@@ -31,6 +31,7 @@ builder.Services.AddSingleton<IndexRefreshCoordinator>();
 builder.Services.AddSingleton<IPhotoRootWatcher, FileSystemPhotoRootWatcher>();
 builder.Services.AddHostedService<IndexingService>();
 builder.Services.Configure<ForwardedHeadersOptions>(ForwardedHeadersSetup.Configure);
+builder.Services.AddRateLimiter(RateLimitingSetup.Configure);
 builder.Services.AddRazorPages();
 
 var app = builder.Build();
@@ -43,7 +44,13 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStaticFiles();
 app.UseRouting();
-app.MapGet("/health", HealthEndpoint.Handle);
+app.UseRateLimiter();
+app.MapGet("/health", HealthEndpoint.Handle)
+    .WithName(HealthEndpoint.RouteName)
+    .RequireRateLimiting(RateLimitingSetup.HealthPolicyName);
+app.MapGet("/health/internal", HealthEndpoint.Handle)
+    .WithName(HealthEndpoint.InternalRouteName)
+    .DisableRateLimiting();
 MediaEndpoint.Map(app);
 app.MapRazorPages();
 
